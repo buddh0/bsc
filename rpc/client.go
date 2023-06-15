@@ -199,7 +199,7 @@ func DialOptions(ctx context.Context, rawurl string, options ...ClientOption) (*
 	return nil, fmt.Errorf("not supported")
 }
 
-// Client retrieves the client from the context, if any. This can be used to perform
+// ClientFromContext retrieves the client from the context, if any. This can be used to perform
 // 'reverse calls' in a handler method.
 func ClientFromContext(ctx context.Context) (*Client, bool) {
 	client, ok := ctx.Value(clientContextKey{}).(*Client)
@@ -346,7 +346,7 @@ func (c *Client) BatchCall(b []BatchElem) error {
 	return c.BatchCallContext(ctx, b)
 }
 
-// BatchCall sends all given requests as a single batch and waits for the server
+// BatchCallContext sends all given requests as a single batch and waits for the server
 // to return a response for all of them. The wait duration is bounded by the
 // context's deadline.
 //

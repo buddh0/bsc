@@ -64,6 +64,7 @@ type KeyValueStore interface {
 	Iteratee
 	Stater
 	Compacter
+	Snapshotter
 	io.Closer
 }
 
@@ -165,5 +166,6 @@ type Database interface {
 	Iteratee
 	Stater
 	Compacter
+	Snapshotter
 	io.Closer
 }

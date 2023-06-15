@@ -585,19 +585,19 @@ func (p *Pruner) Prune(root common.Hash) error {
 	// is the presence of root can indicate the presence of the
 	// entire trie.
 	if !rawdb.HasTrieNode(p.db, root) {
-		// The special case is for clique based networks(rinkeby, goerli
+		// The special case is for clique based networks(goerli
 		// and some other private networks), it's possible that two
 		// consecutive blocks will have same root. In this case snapshot
-		// difflayer won't be created. So HEAD-(n-1) may not paired with
-		// head-(n-1) layer. Instead the paired layer is higher than the
+		// difflayer won't be created. So HEAD-127 may not paired with
+		// head-127 layer. Instead the paired layer is higher than the
 		// bottom-most diff layer. Try to find the bottom-most snapshot
 		// layer with state available.
 		//
-		// Note HEAD is ignored. Usually there is the associated
+		// Note HEAD and HEAD-1 is ignored. Usually there is the associated
 		// state available, but we don't want to use the topmost state
 		// as the pruning target.
 		var found bool
-		for i := len(layers) - 2; i >= 1; i-- {
+		for i := len(layers) - 2; i >= 2; i-- {
 			if rawdb.HasTrieNode(p.db, layers[i].Root()) {
 				root = layers[i].Root()
 				found = true

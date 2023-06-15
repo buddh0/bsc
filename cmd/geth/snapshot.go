@@ -367,7 +367,7 @@ func pruneBlock(ctx *cli.Context) error {
 	if exist {
 		defer lock.Release()
 		log.Info("file lock existed, waiting for prune recovery and continue", "err", err)
-		if err := blockpruner.RecoverInterruption("chaindata", config.Eth.DatabaseCache, utils.MakeDatabaseHandles(), "", false); err != nil {
+		if err := blockpruner.RecoverInterruption("chaindata", config.Eth.DatabaseCache, utils.MakeDatabaseHandles(0), "", false); err != nil {
 			log.Error("Pruning failed", "err", err)
 			return err
 		}
@@ -386,7 +386,7 @@ func pruneBlock(ctx *cli.Context) error {
 		return nil
 	}
 	name := "chaindata"
-	if err := blockpruner.BlockPruneBackUp(name, config.Eth.DatabaseCache, utils.MakeDatabaseHandles(), "", false, false); err != nil {
+	if err := blockpruner.BlockPruneBackUp(name, config.Eth.DatabaseCache, utils.MakeDatabaseHandles(0), "", false, false); err != nil {
 		log.Error("Failed to back up block", "err", err)
 		return err
 	}
