@@ -676,7 +676,7 @@ func TestTruncateTail(t *testing.T) {
 	}
 
 	// Write 7 x 20 bytes, splitting out into four files
-	batch := f.newBatch()
+	batch := f.newBatch(0)
 	require.NoError(t, batch.AppendRaw(0, getChunk(20, 0xFF)))
 	require.NoError(t, batch.AppendRaw(1, getChunk(20, 0xEE)))
 	require.NoError(t, batch.AppendRaw(2, getChunk(20, 0xdd)))
@@ -791,7 +791,7 @@ func TestTruncateHead(t *testing.T) {
 	}
 
 	// Write 7 x 20 bytes, splitting out into four files
-	batch := f.newBatch()
+	batch := f.newBatch(0)
 	require.NoError(t, batch.AppendRaw(0, getChunk(20, 0xFF)))
 	require.NoError(t, batch.AppendRaw(1, getChunk(20, 0xEE)))
 	require.NoError(t, batch.AppendRaw(2, getChunk(20, 0xdd)))
@@ -816,7 +816,7 @@ func TestTruncateHead(t *testing.T) {
 	})
 
 	// Append new items
-	batch = f.newBatch()
+	batch = f.newBatch(0)
 	require.NoError(t, batch.AppendRaw(4, getChunk(20, 0xbb)))
 	require.NoError(t, batch.AppendRaw(5, getChunk(20, 0xaa)))
 	require.NoError(t, batch.AppendRaw(6, getChunk(20, 0x11)))
@@ -1231,7 +1231,7 @@ func runRandTest(rt randTest) bool {
 			}
 
 		case opAppend:
-			batch := f.newBatch()
+			batch := f.newBatch(0)
 			for i := 0; i < len(step.items); i++ {
 				batch.AppendRaw(step.items[i], step.blobs[i])
 			}

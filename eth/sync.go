@@ -17,7 +17,6 @@
 package eth
 
 import (
-	"errors"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -130,18 +129,10 @@ func (cs *chainSyncer) loop() {
 		select {
 		case <-cs.peerEventCh:
 			// Peer information changed, recheck.
-		case err := <-cs.doneCh:
+		case <-cs.doneCh:
 			cs.doneCh = nil
 			cs.force.Reset(forceSyncCycle)
 			cs.forced = false
-
-			// If we've reached the merge transition but no beacon client is available, or
-			// it has not yet switched us over, keep warning the user that their infra is
-			// potentially flaky.
-			if errors.Is(err, downloader.ErrMergeTransition) && time.Since(cs.warned) > 10*time.Second {
-				log.Warn("Local chain is post-merge, waiting for beacon client sync switch-over...")
-				cs.warned = time.Now()
-			}
 		case <-cs.force.C:
 			cs.forced = true
 
