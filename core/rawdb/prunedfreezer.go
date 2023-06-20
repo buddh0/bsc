@@ -136,6 +136,11 @@ func (f *prunedfreezer) AncientOffSet() uint64 {
 	return atomic.LoadUint64(&f.frozen)
 }
 
+// Tail returns the number of first stored item in the freezer.
+func (f *prunedfreezer) Tail() (uint64, error) {
+	return 0, errNotSupported
+}
+
 // AncientSize returns the ancient size of the specified category, return 0.
 func (f *prunedfreezer) AncientSize(kind string) (uint64, error) {
 	if _, ok := FreezerNoSnappy[kind]; ok {
@@ -158,13 +163,18 @@ func (f *prunedfreezer) AppendAncient(number uint64, hash, header, body, receipt
 }
 
 // TruncateAncients discards any recent data above the provided threshold number, always success.
-func (f *prunedfreezer) TruncateAncients(items uint64) error {
+func (f *prunedfreezer) TruncateHead(items uint64) error {
 	if atomic.LoadUint64(&f.frozen) <= items {
 		return nil
 	}
 	atomic.StoreUint64(&f.frozen, items)
 	WriteFrozenOfAncientFreezer(f.db, atomic.LoadUint64(&f.frozen))
 	return nil
+}
+
+// TruncateTail discards any recent data below the provided threshold number.
+func (f *prunedfreezer) TruncateTail(tail uint64) error {
+	return errNotSupported
 }
 
 // Sync flushes meta data tables to disk.

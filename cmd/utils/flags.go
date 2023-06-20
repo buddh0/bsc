@@ -261,9 +261,13 @@ var (
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 	}
-	WhitelistFlag = cli.StringFlag{
+	EthPeerRequiredBlocksFlag = cli.StringFlag{
+		Name:  "eth.requiredblocks",
+		Usage: "Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)",
+	}
+	LegacyWhitelistFlag = cli.StringFlag{
 		Name:  "whitelist",
-		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>)",
+		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>) (deprecated in favor of --peer.requiredblocks)",
 	}
 	BloomFilterSizeFlag = cli.Uint64Flag{
 		Name:  "bloomfilter.size",
@@ -589,15 +593,20 @@ var (
 		Value: ethconfig.Defaults.RPCTxFeeCap,
 	}
 	// Authenticated RPC HTTP settings
-	AuthHostFlag = cli.StringFlag{
-		Name:  "authrpc.host",
+	AuthListenFlag = cli.StringFlag{
+		Name:  "authrpc.addr",
 		Usage: "Listening address for authenticated APIs",
-		Value: node.DefaultConfig.AuthHost,
+		Value: node.DefaultConfig.AuthAddr,
 	}
 	AuthPortFlag = cli.IntFlag{
 		Name:  "authrpc.port",
 		Usage: "Listening port for authenticated APIs",
 		Value: node.DefaultConfig.AuthPort,
+	}
+	AuthVirtualHostsFlag = cli.StringFlag{
+		Name:  "authrpc.vhosts",
+		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
+		Value: strings.Join(node.DefaultConfig.AuthVirtualHosts, ","),
 	}
 	JWTSecretFlag = cli.StringFlag{
 		Name:  "authrpc.jwtsecret",
@@ -1086,11 +1095,16 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 		cfg.HTTPPort = ctx.GlobalInt(HTTPPortFlag.Name)
 	}
 
-	if ctx.GlobalIsSet(AuthHostFlag.Name) {
-		cfg.AuthHost = ctx.GlobalString(AuthHostFlag.Name)
+	if ctx.GlobalIsSet(AuthListenFlag.Name) {
+		cfg.AuthAddr = ctx.GlobalString(AuthListenFlag.Name)
 	}
+
 	if ctx.GlobalIsSet(AuthPortFlag.Name) {
 		cfg.AuthPort = ctx.GlobalInt(AuthPortFlag.Name)
+	}
+
+	if ctx.GlobalIsSet(AuthVirtualHostsFlag.Name) {
+		cfg.AuthVirtualHosts = SplitAndTrim(ctx.GlobalString(AuthVirtualHostsFlag.Name))
 	}
 
 	if ctx.GlobalIsSet(HTTPCORSDomainFlag.Name) {
@@ -1607,26 +1621,33 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	}
 }
 
-func setWhitelist(ctx *cli.Context, cfg *ethconfig.Config) {
-	whitelist := ctx.GlobalString(WhitelistFlag.Name)
-	if whitelist == "" {
-		return
+func setPeerRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
+	peerRequiredBlocks := ctx.GlobalString(EthPeerRequiredBlocksFlag.Name)
+
+	if peerRequiredBlocks == "" {
+		if ctx.GlobalIsSet(LegacyWhitelistFlag.Name) {
+			log.Warn("The flag --rpc is deprecated and will be removed, please use --peer.requiredblocks")
+			peerRequiredBlocks = ctx.GlobalString(LegacyWhitelistFlag.Name)
+		} else {
+			return
+		}
 	}
-	cfg.Whitelist = make(map[uint64]common.Hash)
-	for _, entry := range strings.Split(whitelist, ",") {
+
+	cfg.PeerRequiredBlocks = make(map[uint64]common.Hash)
+	for _, entry := range strings.Split(peerRequiredBlocks, ",") {
 		parts := strings.Split(entry, "=")
 		if len(parts) != 2 {
-			Fatalf("Invalid whitelist entry: %s", entry)
+			Fatalf("Invalid peer required block entry: %s", entry)
 		}
 		number, err := strconv.ParseUint(parts[0], 0, 64)
 		if err != nil {
-			Fatalf("Invalid whitelist block number %s: %v", parts[0], err)
+			Fatalf("Invalid peer required block number %s: %v", parts[0], err)
 		}
 		var hash common.Hash
 		if err = hash.UnmarshalText([]byte(parts[1])); err != nil {
-			Fatalf("Invalid whitelist hash %s: %v", parts[1], err)
+			Fatalf("Invalid peer required block hash %s: %v", parts[1], err)
 		}
-		cfg.Whitelist[number] = hash
+		cfg.PeerRequiredBlocks[number] = hash
 	}
 }
 
@@ -1693,7 +1714,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setTxPool(ctx, &cfg.TxPool)
 	setEthash(ctx, cfg)
 	setMiner(ctx, &cfg.Miner)
-	setWhitelist(ctx, cfg)
+	setPeerRequiredBlocks(ctx, cfg)
 	setLes(ctx, cfg)
 
 	// Cap the cache allowance and tune the garbage collector

@@ -4,7 +4,11 @@ ARG VERSION=""
 ARG BUILDNUM=""
 
 # Build Geth in a stock Go builder container
+<<<<<<< HEAD
 FROM golang:1.19-alpine as builder
+=======
+FROM golang:1.18-alpine as builder
+>>>>>>> 0616
 
 RUN apk add --no-cache make cmake gcc musl-dev linux-headers git bash build-base libc-dev
 # Get dependencies - will also be cached if we won't change go.mod/go.sum

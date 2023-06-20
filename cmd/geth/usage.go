@@ -56,7 +56,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.EthStatsURLFlag,
 			utils.IdentityFlag,
 			utils.LightKDFFlag,
-			utils.WhitelistFlag,
+			utils.EthPeerRequiredBlocksFlag,
 			utils.TriesInMemoryFlag,
 			utils.BlockAmountReserved,
 			utils.CheckSnapshotWithMPT,
@@ -159,8 +159,9 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.WSPathPrefixFlag,
 			utils.WSAllowedOriginsFlag,
 			utils.JWTSecretFlag,
-			utils.AuthHostFlag,
+			utils.AuthListenFlag,
 			utils.AuthPortFlag,
+			utils.AuthVirtualHostsFlag,
 			utils.GraphQLEnabledFlag,
 			utils.GraphQLCORSDomainFlag,
 			utils.GraphQLVirtualHostsFlag,
@@ -237,6 +238,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		Name: "ALIASED (deprecated)",
 		Flags: []cli.Flag{
 			utils.NoUSBFlag,
+			utils.LegacyWhitelistFlag,
 		},
 	},
 	{

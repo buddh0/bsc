@@ -116,7 +116,7 @@ type handlerConfig struct {
 	BloomCache             uint64                    // Megabytes to alloc for snap sync bloom
 	EventMux               *event.TypeMux            // Legacy event mux, deprecate for `feed`
 	Checkpoint             *params.TrustedCheckpoint // Hard coded checkpoint for sync challenges
-	Whitelist              map[uint64]common.Hash    // Hard coded whitelist for sync challenged
+	PeerRequiredBlocks     map[uint64]common.Hash    // Hard coded map of required block hashes for sync challenges
 	DirectBroadcast        bool
 	DisablePeerTxBroadcast bool
 	PeerSet                *peerSet
@@ -161,7 +161,7 @@ type handler struct {
 	votesSub       event.Subscription
 	voteMonitorSub event.Subscription
 
-	whitelist map[uint64]common.Hash
+	peerRequiredBlocks map[uint64]common.Hash
 
 	// channels for fetcher, syncer, txsyncLoop
 	quitSync chan struct{}
@@ -192,7 +192,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		peers:                  config.PeerSet,
 		merger:                 config.Merger,
 		peersPerIP:             make(map[string]int),
-		whitelist:              config.Whitelist,
+		peerRequiredBlocks:     config.PeerRequiredBlocks,
 		directBroadcast:        config.DirectBroadcast,
 		diffSync:               config.DiffSync,
 		quitSync:               make(chan struct{}),
@@ -506,8 +506,8 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 			}
 		}()
 	}
-	// If we have any explicit whitelist block hashes, request them
-	for number, hash := range h.whitelist {
+	// If we have any explicit peer required block hashes, request them
+	for number := range h.peerRequiredBlocks {
 		resCh := make(chan *eth.Response)
 
 		req, err := peer.RequestHeadersByNumber(number, 1, 0, false, resCh)
@@ -525,25 +525,25 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 			case res := <-resCh:
 				headers := ([]*types.Header)(*res.Res.(*eth.BlockHeadersPacket))
 				if len(headers) == 0 {
-					// Whitelisted blocks are allowed to be missing if the remote
+					// Required blocks are allowed to be missing if the remote
 					// node is not yet synced
 					res.Done <- nil
 					return
 				}
 				// Validate the header and either drop the peer or continue
 				if len(headers) > 1 {
-					res.Done <- errors.New("too many headers in whitelist response")
+					res.Done <- errors.New("too many headers in required block response")
 					return
 				}
 				if headers[0].Number.Uint64() != number || headers[0].Hash() != hash {
-					peer.Log().Info("Whitelist mismatch, dropping peer", "number", number, "hash", headers[0].Hash(), "want", hash)
-					res.Done <- errors.New("whitelist block mismatch")
+					peer.Log().Info("Required block mismatch, dropping peer", "number", number, "hash", headers[0].Hash(), "want", hash)
+					res.Done <- errors.New("required block mismatch")
 					return
 				}
-				peer.Log().Debug("Whitelist block verified", "number", number, "hash", hash)
+				peer.Log().Debug("Peer required block verified", "number", number, "hash", hash)
 				res.Done <- nil
 			case <-timeout.C:
-				peer.Log().Warn("Whitelist challenge timed out, dropping", "addr", peer.RemoteAddr(), "type", peer.Name())
+				peer.Log().Warn("Required block challenge timed out, dropping", "addr", peer.RemoteAddr(), "type", peer.Name())
 				h.removePeer(peer.ID())
 			}
 		}(number, hash, req)
