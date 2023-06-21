@@ -83,6 +83,11 @@ require (
 )
 
 require (
+	github.com/fjl/gencodec v0.0.0-20230517082657-f9840df7b83e
+	golang.org/x/mobile v0.0.0-20190719004257-d2bd2a29d028
+)
+
+require (
 	contrib.go.opencensus.io/exporter/jaeger v0.2.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v0.21.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v0.8.3 // indirect
@@ -114,6 +119,7 @@ require (
 	github.com/flynn/noise v1.0.0 // indirect
 	github.com/francoispqt/gojay v1.2.13 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
+	github.com/garslo/gogen v0.0.0-20170306192744-1d203ffc1f61 // indirect
 	github.com/go-kit/kit v0.12.0 // indirect
 	github.com/go-kit/log v0.2.1 // indirect
 	github.com/go-logfmt/logfmt v0.5.1 // indirect

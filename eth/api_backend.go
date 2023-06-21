@@ -88,6 +88,9 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 		}
 		return nil, errors.New("safe block not found")
 	}
+	if number == rpc.FinalizedBlockNumber {
+		return b.eth.blockchain.CurrentFinalizedBlock().Header(), nil
+	}
 	return b.eth.blockchain.GetHeaderByNumber(uint64(number)), nil
 }
 
@@ -215,11 +218,11 @@ func (b *EthAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*typ
 	db := b.eth.ChainDb()
 	number := rawdb.ReadHeaderNumber(db, hash)
 	if number == nil {
-		return nil, errors.New("failed to get block number from hash")
+		return nil, fmt.Errorf("failed to get block number for hash %#x", hash)
 	}
 	logs := rawdb.ReadLogs(db, hash, *number, b.eth.blockchain.Config())
 	if logs == nil {
-		return nil, errors.New("failed to get logs for block")
+		return nil, fmt.Errorf("failed to get logs for block #%d (0x%s)", *number, hash.TerminalString())
 	}
 	return logs, nil
 }

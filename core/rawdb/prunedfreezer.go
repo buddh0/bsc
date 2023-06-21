@@ -136,6 +136,11 @@ func (f *prunedfreezer) AncientOffSet() uint64 {
 	return atomic.LoadUint64(&f.frozen)
 }
 
+// AncientDatadir returns the ancient datadir of the underlying database.
+func (f *prunedfreezer) AncientDatadir() (string, error) {
+	return "", errNotSupported
+}
+
 // Tail returns the number of first stored item in the freezer.
 func (f *prunedfreezer) Tail() (uint64, error) {
 	return 0, errNotSupported
@@ -301,7 +306,7 @@ func (f *prunedfreezer) freeze() {
 	}
 }
 
-func (f *prunedfreezer) ReadAncients(fn func(ethdb.AncientReader) error) (err error) {
+func (f *prunedfreezer) ReadAncients(fn func(ethdb.AncientReaderOp) error) (err error) {
 	return fn(f)
 }
 
@@ -311,4 +316,8 @@ func (f *prunedfreezer) AncientRange(kind string, start, count, maxBytes uint64)
 
 func (f *prunedfreezer) ModifyAncients(func(ethdb.AncientWriteOp) error) (int64, error) {
 	return 0, errNotSupported
+}
+
+func (f *prunedfreezer) MigrateTable(s string, g func([]byte) ([]byte, error)) error {
+	return errNotSupported
 }

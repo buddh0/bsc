@@ -85,6 +85,8 @@ var (
 	errCanceled                = errors.New("syncing canceled (requested)")
 	errTooOld                  = errors.New("peer's protocol version too old")
 	errNoAncestorFound         = errors.New("no common ancestor found")
+	errNoPivotHeader           = errors.New("pivot header is not found")
+	ErrMergeTransition         = errors.New("legacy sync reached the merge")
 )
 
 // peerDropFn is a callback type for dropping a peer detected as malicious.
@@ -405,7 +407,7 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, ttd *
 // checks fail an error will be returned. This method is synchronous
 func (d *Downloader) synchronise(id string, hash common.Hash, td, ttd *big.Int, mode SyncMode, beaconMode bool, beaconPing chan struct{}) error {
 	// The beacon header syncer is async. It will start this synchronization and
-	// will continue doing other tasks. However, if synchornization needs to be
+	// will continue doing other tasks. However, if synchronization needs to be
 	// cancelled, the syncer needs to know if we reached the startup point (and
 	// inited the cancel cannel) or not yet. Make sure that we'll signal even in
 	// case of a failure.
@@ -1733,4 +1735,26 @@ func (d *Downloader) DeliverSnapPacket(peer *snap.Peer, packet snap.Packet) erro
 	default:
 		return fmt.Errorf("unexpected snap packet type: %T", packet)
 	}
+}
+
+// readHeaderRange returns a list of headers, using the given last header as the base,
+// and going backwards towards genesis. This method assumes that the caller already has
+// placed a reasonable cap on count.
+func (d *Downloader) readHeaderRange(last *types.Header, count int) []*types.Header {
+	var (
+		current = last
+		headers []*types.Header
+	)
+	for {
+		parent := d.lightchain.GetHeaderByHash(current.ParentHash)
+		if parent == nil {
+			break // The chain is not continuous, or the chain is exhausted
+		}
+		headers = append(headers, parent)
+		if len(headers) >= count {
+			break
+		}
+		current = parent
+	}
+	return headers
 }

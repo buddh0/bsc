@@ -115,12 +115,33 @@ The hardware must meet certain requirements to run a full node on mainnet:
 - Suggest m5zn.3xlarge instance type on AWS, c2-standard-16 on Google cloud.
 - A broadband Internet connection with upload/download speeds of 5 MB/S
 
+<<<<<<< HEAD
 The requirement for testnet:
 - VPS running recent versions of Mac OS X, Linux, or Windows.
 - 500G of storage for testnet.
 - 4 cores of CPU and 8 gigabytes of memory (RAM).
 
 ### Steps to Run a Fullnode
+=======
+* CPU with 2+ cores
+* 4GB RAM
+* 1TB free storage space to sync the Mainnet
+* 8 MBit/sec download Internet service
+
+Recommended:
+
+* Fast CPU with 4+ cores
+* 16GB+ RAM
+* High Performance SSD with at least 1TB free space
+* 25+ MBit/sec download Internet service
+
+### Full node on the main Ethereum network
+
+By far the most common scenario is people wanting to simply interact with the Ethereum
+network: create accounts; transfer funds; deploy and interact with contracts. For this
+particular use-case the user doesn't care about years-old historical data, so we can
+sync quickly to the current state of the network. To do so:
+>>>>>>> 0620
 
 #### 1. Download the pre-build binaries
 ```shell

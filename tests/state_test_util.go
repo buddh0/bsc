@@ -76,7 +76,7 @@ type stPostState struct {
 	}
 }
 
-//go:generate gencodec -type stEnv -field-override stEnvMarshaling -out gen_stenv.go
+//go:generate go run github.com/fjl/gencodec -type stEnv -field-override stEnvMarshaling -out gen_stenv.go
 
 type stEnv struct {
 	Coinbase   common.Address `json:"currentCoinbase"   gencodec:"required"`
@@ -98,7 +98,7 @@ type stEnvMarshaling struct {
 	BaseFee    *math.HexOrDecimal256
 }
 
-//go:generate gencodec -type stTransaction -field-override stTransactionMarshaling -out gen_sttransaction.go
+//go:generate go run github.com/fjl/gencodec -type stTransaction -field-override stTransactionMarshaling -out gen_sttransaction.go
 
 type stTransaction struct {
 	GasPrice             *big.Int            `json:"gasPrice"`
@@ -244,6 +244,8 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	// - there are only 'bad' transactions, which aren't executed. In those cases,
 	//   the coinbase gets no txfee, so isn't created, and thus needs to be touched
 	statedb.AddBalance(block.Coinbase(), new(big.Int))
+	// Commit block
+	statedb.Commit(nil, nil)
 	// And _now_ get the state root
 	root := statedb.IntermediateRoot(config.IsEIP158(block.Number()))
 	return snaps, statedb, root, nil

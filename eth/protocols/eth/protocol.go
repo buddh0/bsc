@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -212,7 +212,7 @@ type BlockHeadersPacket66 struct {
 // have the headers rlp encoded.
 type BlockHeadersRLPPacket []rlp.RawValue
 
-// BlockHeadersPacket represents a block header response over eth/66.
+// BlockHeadersRLPPacket66 represents a block header response over eth/66.
 type BlockHeadersRLPPacket66 struct {
 	RequestId uint64
 	BlockHeadersRLPPacket

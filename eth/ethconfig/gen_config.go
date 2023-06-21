@@ -36,7 +36,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		DiffSync                        bool
 		RangeLimit                      bool
 		TxLookupLimit                   uint64                 `toml:",omitempty"`
-		PeerRequiredBlocks              map[uint64]common.Hash `toml:"-"`
+		RequiredBlocks                  map[uint64]common.Hash `toml:"-"`
 		LightServ                       int                    `toml:",omitempty"`
 		LightIngress                    int                    `toml:",omitempty"`
 		LightEgress                     int                    `toml:",omitempty"`
@@ -99,7 +99,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.DiffSync = c.DiffSync
 	enc.RangeLimit = c.RangeLimit
 	enc.TxLookupLimit = c.TxLookupLimit
-	enc.PeerRequiredBlocks = c.PeerRequiredBlocks
+	enc.RequiredBlocks = c.RequiredBlocks
 	enc.LightServ = c.LightServ
 	enc.LightIngress = c.LightIngress
 	enc.LightEgress = c.LightEgress
@@ -167,7 +167,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		DiffSync                        *bool
 		RangeLimit                      *bool
 		TxLookupLimit                   *uint64                `toml:",omitempty"`
-		PeerRequiredBlocks              map[uint64]common.Hash `toml:"-"`
+		RequiredBlocks                  map[uint64]common.Hash `toml:"-"`
 		LightServ                       *int                   `toml:",omitempty"`
 		LightIngress                    *int                   `toml:",omitempty"`
 		LightEgress                     *int                   `toml:",omitempty"`
@@ -267,8 +267,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.TxLookupLimit != nil {
 		c.TxLookupLimit = *dec.TxLookupLimit
 	}
-	if dec.PeerRequiredBlocks != nil {
-		c.PeerRequiredBlocks = dec.PeerRequiredBlocks
+	if dec.RequiredBlocks != nil {
+		c.RequiredBlocks = dec.RequiredBlocks
 	}
 	if dec.LightServ != nil {
 		c.LightServ = *dec.LightServ

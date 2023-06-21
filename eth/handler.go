@@ -116,7 +116,7 @@ type handlerConfig struct {
 	BloomCache             uint64                    // Megabytes to alloc for snap sync bloom
 	EventMux               *event.TypeMux            // Legacy event mux, deprecate for `feed`
 	Checkpoint             *params.TrustedCheckpoint // Hard coded checkpoint for sync challenges
-	PeerRequiredBlocks     map[uint64]common.Hash    // Hard coded map of required block hashes for sync challenges
+	RequiredBlocks         map[uint64]common.Hash    // Hard coded map of required block hashes for sync challenges
 	DirectBroadcast        bool
 	DisablePeerTxBroadcast bool
 	PeerSet                *peerSet
@@ -161,7 +161,7 @@ type handler struct {
 	votesSub       event.Subscription
 	voteMonitorSub event.Subscription
 
-	peerRequiredBlocks map[uint64]common.Hash
+	requiredBlocks map[uint64]common.Hash
 
 	// channels for fetcher, syncer, txsyncLoop
 	quitSync chan struct{}
@@ -192,7 +192,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		peers:                  config.PeerSet,
 		merger:                 config.Merger,
 		peersPerIP:             make(map[string]int),
-		peerRequiredBlocks:     config.PeerRequiredBlocks,
+		requiredBlocks:         config.RequiredBlocks,
 		directBroadcast:        config.DirectBroadcast,
 		diffSync:               config.DiffSync,
 		quitSync:               make(chan struct{}),
@@ -507,7 +507,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		}()
 	}
 	// If we have any explicit peer required block hashes, request them
-	for number := range h.peerRequiredBlocks {
+	for number, hash := range h.requiredBlocks {
 		resCh := make(chan *eth.Response)
 
 		req, err := peer.RequestHeadersByNumber(number, 1, 0, false, resCh)

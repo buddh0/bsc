@@ -12,6 +12,11 @@ COPY go.mod /go-ethereum/
 COPY go.sum /go-ethereum/
 RUN cd /go-ethereum && go mod download
 
+# Get dependencies - will also be cached if we won't change go.mod/go.sum
+COPY go.mod /go-ethereum/
+COPY go.sum /go-ethereum/
+RUN cd /go-ethereum && go mod download
+
 ADD . /go-ethereum
 
 # For blst

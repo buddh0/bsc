@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -18,6 +18,8 @@
 package catalyst
 
 import (
+	"sync"
+
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -50,6 +52,8 @@ type ConsensusAPI struct {
 	eth          *eth.Ethereum
 	remoteBlocks *headerQueue  // Cache of remote payloads received
 	localBlocks  *payloadQueue // Cache of local payloads generated
+	// Lock for the forkChoiceUpdated method
+	forkChoiceLock sync.Mutex
 }
 
 // NewConsensusAPI creates a new consensus api for the given backend.

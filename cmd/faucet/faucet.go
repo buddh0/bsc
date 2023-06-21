@@ -17,17 +17,16 @@
 // faucet is an Ether faucet backed by a light client.
 package main
 
-//go:generate go-bindata -nometadata -o website.go faucet.html
-//go:generate gofmt -w -s website.go
-
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"html/template"
+	"io"
 	"io/ioutil"
 	"math"
 	"math/big"
@@ -101,6 +100,9 @@ var (
 	gitCommit = "" // Git SHA1 commit hash of the release (set via linker flags)
 	gitDate   = "" // Git commit date YYYYMMDD of the release (set via linker flags)
 )
+
+//go:embed faucet.html
+var websiteTmpl string
 
 func main() {
 	// Parse the flags and set up the logger to print everything requested
@@ -824,7 +826,7 @@ func authTwitter(url string, tokenV1, tokenV2 string) (string, string, string, c
 	}
 	username := parts[len(parts)-3]
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return "", "", "", common.Address{}, err
 	}
@@ -950,7 +952,7 @@ func authFacebook(url string) (string, string, common.Address, error) {
 	}
 	defer res.Body.Close()
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return "", "", common.Address{}, err
 	}

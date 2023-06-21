@@ -169,8 +169,8 @@ type newWorkReq struct {
 // getWorkReq represents a request for getting a new sealing work with provided parameters.
 type getWorkReq struct {
 	params *generateParams
+	result chan *types.Block // non-blocking channel
 	err    error
-	result chan *types.Block
 }
 
 // worker is the main object which takes care of submitting new work to consensus engine
@@ -484,9 +484,9 @@ func (w *worker) mainLoop() {
 				req.err = err
 				req.result <- nil
 			} else {
+				req.err = nil
 				req.result <- block
 			}
-
 		case ev := <-w.chainSideCh:
 			// Short circuit for duplicate side blocks
 			if _, ok := w.engine.(*parlia.Parlia); ok {
@@ -923,6 +923,7 @@ type generateParams struct {
 	noUncle    bool           // Flag whether the uncle block inclusion is allowed
 	noExtra    bool           // Flag whether the extra field assignment is allowed
 	prevWork   *environment
+	noTxs      bool // Flag whether an empty block without any transaction is expected
 }
 
 // prepareWork constructs the sealing task according to the given parameters,
@@ -1052,7 +1053,9 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	}
 	defer work.discard()
 
-	w.fillTransactions(nil, work, nil)
+	if !params.noTxs {
+		w.fillTransactions(nil, work, nil)
+	}
 	block, _, err := w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
 	return block, err
 }
@@ -1276,7 +1279,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 }
 
 // getSealingBlock generates the sealing block based on the given parameters.
-func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash) (*types.Block, error) {
+func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, noTxs bool) (*types.Block, error) {
 	req := &getWorkReq{
 		params: &generateParams{
 			timestamp:  timestamp,
@@ -1286,6 +1289,7 @@ func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase 
 			random:     random,
 			noUncle:    true,
 			noExtra:    true,
+			noTxs:      noTxs,
 		},
 		result: make(chan *types.Block, 1),
 	}
