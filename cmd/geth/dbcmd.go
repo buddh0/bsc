@@ -74,7 +74,8 @@ Remove blockchain and state databases`,
 			dbExportCmd,
 			dbMetadataCmd,
 			ancientInspectCmd,
-			dbMigrateFreezerCmd,
+			// no legacy stored receipts for bsc
+			// dbMigrateFreezerCmd,
 		},
 	}
 	dbInspectCmd = cli.Command{
