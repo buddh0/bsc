@@ -136,6 +136,12 @@ func (f *prunedfreezer) AncientOffSet() uint64 {
 	return atomic.LoadUint64(&f.frozen)
 }
 
+// MigrateTable processes the entries in a given table in sequence
+// converting them to a new format if they're of an old format.
+func (db *prunedfreezer) MigrateTable(kind string, convert convertLegacyFn) error {
+	return errNotSupported
+}
+
 // Tail returns the number of first stored item in the freezer.
 func (f *prunedfreezer) Tail() (uint64, error) {
 	return 0, errNotSupported
