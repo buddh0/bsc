@@ -86,7 +86,7 @@ var Defaults = Config{
 	SnapshotCache:           102,
 	DiffBlock:               uint64(86400),
 	Miner: miner.Config{
-		GasCeil:       8000000,
+		GasCeil:       30000000,
 		GasPrice:      big.NewInt(params.GWei),
 		Recommit:      3 * time.Second,
 		DelayLeftOver: 50 * time.Millisecond,
@@ -119,7 +119,7 @@ func init() {
 	}
 }
 
-//go:generate gencodec -type Config -formats toml -out gen_config.go
+//go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
 
 // Config contains configuration options for of the ETH and LES protocols.
 type Config struct {

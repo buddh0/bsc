@@ -154,6 +154,21 @@ the trie clean cache with default directory will be deleted.
 `,
 			},
 			{
+				Name:      "check-dangling-storage",
+				Usage:     "Check that there is no 'dangling' snap storage",
+				ArgsUsage: "<root>",
+				Action:    utils.MigrateFlags(checkDanglingStorage),
+				Category:  "MISCELLANEOUS COMMANDS",
+				Flags: []cli.Flag{
+					utils.DataDirFlag,
+					utils.AncientFlag,
+				},
+				Description: `
+geth snapshot check-dangling-storage <state-root> traverses the snap storage 
+data, and verifies that all snapshot storage data has a corresponding account. 
+`,
+			},
+			{
 				Name:      "traverse-state",
 				Usage:     "Traverse the state with given root hash for verification",
 				ArgsUsage: "<root>",
@@ -506,6 +521,78 @@ func verifyState(ctx *cli.Context) error {
 		return err
 	}
 	log.Info("Verified the state", "root", root)
+	if err := checkDangling(chaindb, snaptree.Snapshot(root)); err != nil {
+		log.Error("Dangling snap storage check failed", "root", root, "err", err)
+		return err
+	}
+	return nil
+}
+
+// checkDanglingStorage iterates the snap storage data, and verifies that all
+// storage also has corresponding account data.
+func checkDanglingStorage(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	chaindb := utils.MakeChainDatabase(ctx, stack, true, false)
+	headBlock := rawdb.ReadHeadBlock(chaindb)
+	if headBlock == nil {
+		log.Error("Failed to load head block")
+		return errors.New("no head block")
+	}
+	triesInMemory := ctx.GlobalUint64(utils.TriesInMemoryFlag.Name)
+	snaptree, err := snapshot.New(chaindb, trie.NewDatabase(chaindb), int(triesInMemory), 256, headBlock.Root(), false, false, false, false)
+	if err != nil {
+		log.Error("Failed to open snapshot tree", "err", err)
+		return err
+	}
+	if ctx.NArg() > 1 {
+		log.Error("Too many arguments given")
+		return errors.New("too many arguments")
+	}
+	var root = headBlock.Root()
+	if ctx.NArg() == 1 {
+		root, err = parseRoot(ctx.Args()[0])
+		if err != nil {
+			log.Error("Failed to resolve state root", "err", err)
+			return err
+		}
+	}
+	return checkDangling(chaindb, snaptree.Snapshot(root))
+}
+
+func checkDangling(chaindb ethdb.Database, snap snapshot.Snapshot) error {
+	log.Info("Checking dangling snapshot storage")
+	var (
+		lastReport = time.Now()
+		start      = time.Now()
+		lastKey    []byte
+		it         = rawdb.NewKeyLengthIterator(chaindb.NewIterator(rawdb.SnapshotStoragePrefix, nil), 1+2*common.HashLength)
+	)
+	defer it.Release()
+	for it.Next() {
+		k := it.Key()
+		accKey := k[1:33]
+		if bytes.Equal(accKey, lastKey) {
+			// No need to look up for every slot
+			continue
+		}
+		lastKey = common.CopyBytes(accKey)
+		if time.Since(lastReport) > time.Second*8 {
+			log.Info("Iterating snap storage", "at", fmt.Sprintf("%#x", accKey), "elapsed", common.PrettyDuration(time.Since(start)))
+			lastReport = time.Now()
+		}
+		data, err := snap.AccountRLP(common.BytesToHash(accKey))
+		if err != nil {
+			log.Error("Error loading snap storage data", "account", fmt.Sprintf("%#x", accKey), "err", err)
+			return err
+		}
+		if len(data) == 0 {
+			log.Error("Dangling storage - missing account", "account", fmt.Sprintf("%#x", accKey), "storagekey", fmt.Sprintf("%#x", k))
+			return fmt.Errorf("dangling snapshot storage account %#x", accKey)
+		}
+	}
+	log.Info("Verified the snapshot storage", "root", snap.Root(), "time", common.PrettyDuration(time.Since(start)), "err", it.Error())
 	return nil
 }
 

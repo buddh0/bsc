@@ -24,6 +24,7 @@ require (
 	github.com/etcd-io/bbolt v1.3.3 // indirect
 	github.com/fatih/color v1.13.0
 	github.com/fatih/structs v1.1.0
+	github.com/fjl/gencodec v0.0.0-20220412091415-8bb9e558978c
 	github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5
 	github.com/gballet/go-libpcsclite v0.0.0-20191108122812-4678299bea08
 	github.com/go-ole/go-ole v1.2.6 // indirect
@@ -48,9 +49,11 @@ require (
 	github.com/jmhodges/levigo v1.0.0 // indirect
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/karalabe/usb v0.0.2
+	github.com/kevinburke/go-bindata v3.23.0+incompatible
 	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/mattn/go-colorable v0.1.13
 	github.com/mattn/go-isatty v0.0.16
+	github.com/naoina/go-stringutil v0.1.0 // indirect
 	github.com/naoina/toml v0.1.2-0.20170918210437-9fafd6967416
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/panjf2000/ants/v2 v2.4.5
@@ -81,6 +84,8 @@ require (
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce
 	gopkg.in/urfave/cli.v1 v1.20.0
 )
+
+require golang.org/x/mobile v0.0.0-20190719004257-d2bd2a29d028
 
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.2.1 // indirect
@@ -114,6 +119,7 @@ require (
 	github.com/flynn/noise v1.0.0 // indirect
 	github.com/francoispqt/gojay v1.2.13 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
+	github.com/garslo/gogen v0.0.0-20170306192744-1d203ffc1f61 // indirect
 	github.com/go-kit/kit v0.12.0 // indirect
 	github.com/go-kit/log v0.2.1 // indirect
 	github.com/go-logfmt/logfmt v0.5.1 // indirect
@@ -189,7 +195,6 @@ require (
 	github.com/multiformats/go-multihash v0.2.1 // indirect
 	github.com/multiformats/go-multistream v0.4.1 // indirect
 	github.com/multiformats/go-varint v0.0.7 // indirect
-	github.com/naoina/go-stringutil v0.1.0 // indirect
 	github.com/onsi/ginkgo/v2 v2.5.1 // indirect
 	github.com/opencontainers/runtime-spec v1.0.2 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect

@@ -161,6 +161,9 @@ type LightChain interface {
 	// GetHeaderByHash retrieves a header from the local chain.
 	GetHeaderByHash(common.Hash) *types.Header
 
+	// GetHeaderByNumber retrieves a block header from the local chain by number.
+	GetHeaderByNumber(number uint64) *types.Header
+
 	// CurrentHeader retrieves the head header from the local chain.
 	CurrentHeader() *types.Header
 
