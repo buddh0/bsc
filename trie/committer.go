@@ -22,8 +22,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"golang.org/x/crypto/sha3"
 )
 
 // leafChanSize is the size of the leafCh. It's a pretty arbitrary number, to allow
@@ -44,8 +42,6 @@ type leaf struct {
 // By 'some level' of parallelism, it's still the case that all leaves will be
 // processed sequentially - onleaf will never be called in parallel or out of order.
 type committer struct {
-	sha crypto.KeccakState
-
 	onleaf LeafCallback
 	leafCh chan *leaf
 }
@@ -53,9 +49,7 @@ type committer struct {
 // committers live in a global sync.Pool
 var committerPool = sync.Pool{
 	New: func() interface{} {
-		return &committer{
-			sha: sha3.NewLegacyKeccak256().(crypto.KeccakState),
-		}
+		return &committer{}
 	},
 }
 
