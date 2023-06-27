@@ -58,6 +58,7 @@ import (
 	"time"
 
 	"github.com/cespare/cp"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/signify"
 	"github.com/ethereum/go-ethereum/internal/build"
 	"github.com/ethereum/go-ethereum/params"
@@ -131,12 +132,13 @@ var (
 	// Note: the following Ubuntu releases have been officially deprecated on Launchpad:
 	//   wily, yakkety, zesty, artful, cosmic, disco, eoan, groovy, hirsuite
 	debDistroGoBoots = map[string]string{
-		"trusty": "golang-1.11", // EOL: 04/2024
-		"xenial": "golang-go",   // EOL: 04/2026
-		"bionic": "golang-go",   // EOL: 04/2028
-		"focal":  "golang-go",   // EOL: 04/2030
-		"impish": "golang-go",   // EOL: 07/2022
-		// "jammy": "golang-go",   // EOL: 04/2027
+		"trusty":  "golang-1.11", // EOL: 04/2024
+		"xenial":  "golang-go",   // EOL: 04/2026
+		"bionic":  "golang-go",   // EOL: 04/2028
+		"focal":   "golang-go",   // EOL: 04/2030
+		"impish":  "golang-go",   // EOL: 07/2022
+		"jammy":   "golang-go",   // EOL: 04/2032
+		//"kinetic": "golang-go",   //  EOL: 07/2023
 	}
 
 	debGoBootPaths = map[string]string{
@@ -162,7 +164,7 @@ func executablePath(name string) string {
 func main() {
 	log.SetFlags(log.Lshortfile)
 
-	if _, err := os.Stat(filepath.Join("build", "ci.go")); os.IsNotExist(err) {
+	if !common.FileExist(filepath.Join("build", "ci.go")) {
 		log.Fatal("this script must be run from the root of the repository")
 	}
 	if len(os.Args) < 2 {
@@ -745,7 +747,7 @@ func ppaUpload(workdir, ppa, sshUser string, files []string) {
 	var idfile string
 	if sshkey := getenvBase64("PPA_SSH_KEY"); len(sshkey) > 0 {
 		idfile = filepath.Join(workdir, "sshkey")
-		if _, err := os.Stat(idfile); os.IsNotExist(err) {
+		if !common.FileExist(idfile) {
 			ioutil.WriteFile(idfile, sshkey, 0600)
 		}
 	}

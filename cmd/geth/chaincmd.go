@@ -51,10 +51,8 @@ var (
 		Name:      "init",
 		Usage:     "Bootstrap and initialize a new genesis block",
 		ArgsUsage: "<genesisPath>",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
-		},
-		Category: "BLOCKCHAIN COMMANDS",
+		Flags:     utils.DatabasePathFlags,
+		Category:  "BLOCKCHAIN COMMANDS",
 		Description: `
 The init command initializes a new genesis block and definition for the network.
 This is a destructive action and changes the network in which you will be
@@ -84,10 +82,8 @@ It expects the genesis file as argument.`,
 		Name:      "dumpgenesis",
 		Usage:     "Dumps genesis block JSON configuration to stdout",
 		ArgsUsage: "",
-		Flags: []cli.Flag{
-			utils.MainnetFlag,
-		},
-		Category: "BLOCKCHAIN COMMANDS",
+		Flags:     utils.NetworkFlags,
+		Category:  "BLOCKCHAIN COMMANDS",
 		Description: `
 The dumpgenesis command dumps the genesis block configuration in JSON format to stdout.`,
 	}
@@ -96,8 +92,7 @@ The dumpgenesis command dumps the genesis block configuration in JSON format to 
 		Name:      "import",
 		Usage:     "Import a blockchain file",
 		ArgsUsage: "<filename> (<filename 2> ... <filename N>) ",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
+		Flags: append([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
 			utils.GCModeFlag,
@@ -119,7 +114,7 @@ The dumpgenesis command dumps the genesis block configuration in JSON format to 
 			utils.MetricsInfluxDBBucketFlag,
 			utils.MetricsInfluxDBOrganizationFlag,
 			utils.TxLookupLimitFlag,
-		},
+		}, utils.DatabasePathFlags...),
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 The import command imports blocks from an RLP-encoded form. The form can be one file
@@ -133,11 +128,10 @@ processing will proceed even if an individual RLP-file import failure occurs.`,
 		Name:      "export",
 		Usage:     "Export blockchain into file",
 		ArgsUsage: "<filename> [<blockNumFirst> <blockNumLast>]",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
+		Flags: append([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
-		},
+		}, utils.DatabasePathFlags...),
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 Requires a first argument of the file to write to.
@@ -151,11 +145,10 @@ be gzipped.`,
 		Name:      "import-preimages",
 		Usage:     "Import the preimage database from an RLP stream",
 		ArgsUsage: "<datafile>",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
+		Flags: append([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
-		},
+		}, utils.DatabasePathFlags...),
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 The import-preimages command imports hash preimages from an RLP encoded stream.
@@ -167,11 +160,10 @@ It's deprecated, please use "geth db import" instead.
 		Name:      "export-preimages",
 		Usage:     "Export the preimage database into an RLP stream",
 		ArgsUsage: "<dumpfile>",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
+		Flags: append([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
-		},
+		}, utils.DatabasePathFlags...),
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 The export-preimages command exports hash preimages to an RLP encoded stream.
@@ -183,8 +175,7 @@ It's deprecated, please use "geth db export" instead.
 		Name:      "dump",
 		Usage:     "Dump a specific block from storage",
 		ArgsUsage: "[? <blockHash> | <blockNum>]",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
+		Flags: append([]cli.Flag{
 			utils.CacheFlag,
 			utils.IterativeOutputFlag,
 			utils.ExcludeCodeFlag,
@@ -192,7 +183,7 @@ It's deprecated, please use "geth db export" instead.
 			utils.IncludeIncompletesFlag,
 			utils.StartKeyFlag,
 			utils.DumpLimitFlag,
-		},
+		}, utils.DatabasePathFlags...),
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 This command dumps out the state for a given block (or latest, if none provided).
@@ -221,9 +212,8 @@ func initGenesis(ctx *cli.Context) error {
 	// Open and initialise both full and light databases
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
-
 	for _, name := range []string{"chaindata", "lightchaindata"} {
-		chaindb, err := stack.OpenDatabase(name, 0, 0, "", false)
+		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.GlobalString(utils.AncientFlag.Name), "", false, false, false, false, true)
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
 		}

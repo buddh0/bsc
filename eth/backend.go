@@ -266,7 +266,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		BloomCache:             uint64(cacheLimit),
 		EventMux:               eth.eventMux,
 		Checkpoint:             checkpoint,
-		PeerRequiredBlocks:     config.PeerRequiredBlocks,
+		RequiredBlocks:         config.RequiredBlocks,
 		DirectBroadcast:        config.DirectBroadcast,
 		DiffSync:               config.DiffSync,
 		DisablePeerTxBroadcast: config.DisablePeerTxBroadcast,

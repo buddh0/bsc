@@ -212,7 +212,7 @@ type BlockHeadersPacket66 struct {
 // have the headers rlp encoded.
 type BlockHeadersRLPPacket []rlp.RawValue
 
-// BlockHeadersPacket represents a block header response over eth/66.
+// BlockHeadersRLPPacket66 represents a block header response over eth/66.
 type BlockHeadersRLPPacket66 struct {
 	RequestId uint64
 	BlockHeadersRLPPacket
