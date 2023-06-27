@@ -142,6 +142,11 @@ func (db *prunedfreezer) MigrateTable(kind string, convert convertLegacyFn) erro
 	return errNotSupported
 }
 
+// AncientDatadir returns an error as we don't have a backing chain freezer.
+func (db *prunedfreezer) AncientDatadir() (string, error) {
+	return "", errNotSupported
+}
+
 // Tail returns the number of first stored item in the freezer.
 func (f *prunedfreezer) Tail() (uint64, error) {
 	return 0, errNotSupported
@@ -307,7 +312,7 @@ func (f *prunedfreezer) freeze() {
 	}
 }
 
-func (f *prunedfreezer) ReadAncients(fn func(ethdb.AncientReader) error) (err error) {
+func (f *prunedfreezer) ReadAncients(fn func(ethdb.AncientReaderOp) error) (err error) {
 	return fn(f)
 }
 

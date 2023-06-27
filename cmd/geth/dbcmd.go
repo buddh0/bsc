@@ -310,7 +310,7 @@ func ancientInspect(ctx *cli.Context) error {
 	return rawdb.AncientInspect(db)
 }
 
-func showLeveldbStats(db ethdb.Stater) {
+func showLeveldbStats(db ethdb.KeyValueStater) {
 	if stats, err := db.Stat("leveldb.stats"); err != nil {
 		log.Warn("Failed to read database stats", "error", err)
 	} else {
