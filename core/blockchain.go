@@ -97,6 +97,7 @@ const (
 	maxBadBlockLimit       = 16
 	maxFutureBlocks        = 256
 	maxTimeFutureBlocks    = 30
+	TriesInMemory          = 128
 	maxBeyondBlocks        = 2048
 	prefetchTxNumber       = 100
 
