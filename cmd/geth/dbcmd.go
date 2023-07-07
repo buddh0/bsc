@@ -74,7 +74,6 @@ Remove blockchain and state databases`,
 			ancientInspectCmd,
 			// no legacy stored receipts for bsc
 			// dbMigrateFreezerCmd,
-			dbMigrateFreezerCmd,
 			dbCheckStateContentCmd,
 		},
 	}

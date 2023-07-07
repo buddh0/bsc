@@ -51,10 +51,9 @@ import (
 )
 
 var (
-	headBlockGauge          = metrics.NewRegisteredGauge("chain/head/block", nil)
-	headHeaderGauge         = metrics.NewRegisteredGauge("chain/head/header", nil)
-	headFastBlockGauge      = metrics.NewRegisteredGauge("chain/head/receipt", nil)
-	headFinalizedBlockGauge = metrics.NewRegisteredGauge("chain/head/finalized", nil)
+	headBlockGauge     = metrics.NewRegisteredGauge("chain/head/block", nil)
+	headHeaderGauge    = metrics.NewRegisteredGauge("chain/head/header", nil)
+	headFastBlockGauge = metrics.NewRegisteredGauge("chain/head/receipt", nil)
 
 	justifiedBlockGauge = metrics.NewRegisteredGauge("chain/head/justified", nil)
 	finalizedBlockGauge = metrics.NewRegisteredGauge("chain/head/finalized", nil)
@@ -224,7 +223,6 @@ type BlockChain struct {
 	currentBlock          atomic.Value // Current head of the block chain
 	currentFastBlock      atomic.Value // Current head of the fast-sync chain (may be above the block chain!)
 	highestVerifiedHeader atomic.Value
-	currentFinalizedBlock atomic.Value // Current finalized head
 
 	stateCache    state.Database // State database to reuse between imports (contains state cache)
 	bodyCache     *lru.Cache     // Cache for the most recent block bodies
@@ -349,7 +347,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	var nilBlock *types.Block
 	bc.currentBlock.Store(nilBlock)
 	bc.currentFastBlock.Store(nilBlock)
-	bc.currentFinalizedBlock.Store(nilBlock)
 
 	var nilHeader *types.Header
 	bc.highestVerifiedHeader.Store(nilHeader)
@@ -666,16 +663,8 @@ func (bc *BlockChain) loadLastState() error {
 		}
 	}
 
-	// Restore the last known finalized block
-	if head := rawdb.ReadFinalizedBlockHash(bc.db); head != (common.Hash{}) {
-		if block := bc.GetBlockByHash(head); block != nil {
-			bc.currentFinalizedBlock.Store(block)
-			headFinalizedBlockGauge.Update(int64(block.NumberU64()))
-		}
-	}
 	// Issue a status log for the user
 	currentFastBlock := bc.CurrentFastBlock()
-	currentFinalizedBlock := bc.CurrentFinalizedBlock()
 
 	headerTd := bc.GetTd(currentHeader.Hash(), currentHeader.Number.Uint64())
 	blockTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
@@ -685,10 +674,15 @@ func (bc *BlockChain) loadLastState() error {
 	log.Info("Loaded most recent local full block", "number", currentBlock.Number(), "hash", currentBlock.Hash(), "td", blockTd, "age", common.PrettyAge(time.Unix(int64(currentBlock.Time()), 0)))
 	log.Info("Loaded most recent local fast block", "number", currentFastBlock.Number(), "hash", currentFastBlock.Hash(), "td", fastTd, "age", common.PrettyAge(time.Unix(int64(currentFastBlock.Time()), 0)))
 
-	if currentFinalizedBlock != nil {
-		finalTd := bc.GetTd(currentFinalizedBlock.Hash(), currentFinalizedBlock.NumberU64())
-		log.Info("Loaded most recent local finalized block", "number", currentFinalizedBlock.Number(), "hash", currentFinalizedBlock.Hash(), "td", finalTd, "age", common.PrettyAge(time.Unix(int64(currentFinalizedBlock.Time()), 0)))
+	if posa, ok := bc.engine.(consensus.PoSA); ok {
+		if currentFinalizedHeader := posa.GetFinalizedHeader(bc, currentHeader); currentFinalizedHeader != nil {
+			if currentFinalizedBlock := bc.GetBlockByHash(currentFinalizedHeader.Hash()); currentFinalizedBlock != nil {
+				finalTd := bc.GetTd(currentFinalizedBlock.Hash(), currentFinalizedBlock.NumberU64())
+				log.Info("Loaded most recent local finalized block", "number", currentFinalizedBlock.Number(), "hash", currentFinalizedBlock.Hash(), "td", finalTd, "age", common.PrettyAge(time.Unix(int64(currentFinalizedBlock.Time()), 0)))
+			}
+		}
 	}
+
 	if pivot := rawdb.ReadLastPivotNumber(bc.db); pivot != nil {
 		log.Info("Loaded last fast-sync pivot marker", "number", *pivot)
 	}
@@ -705,13 +699,6 @@ func (bc *BlockChain) SetHead(head uint64) error {
 	defer bc.chainmu.Unlock()
 	_, err := bc.setHeadBeyondRoot(head, common.Hash{}, false)
 	return err
-}
-
-// SetFinalized sets the finalized block.
-func (bc *BlockChain) SetFinalized(block *types.Block) {
-	bc.currentFinalizedBlock.Store(block)
-	rawdb.WriteFinalizedBlockHash(bc.db, block.Hash())
-	headFinalizedBlockGauge.Update(int64(block.NumberU64()))
 }
 
 func (bc *BlockChain) tryRewindBadBlocks() {

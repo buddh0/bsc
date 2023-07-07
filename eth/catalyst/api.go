@@ -18,8 +18,6 @@
 package catalyst
 
 import (
-	"sync"
-
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -52,8 +50,6 @@ type ConsensusAPI struct {
 	eth          *eth.Ethereum
 	remoteBlocks *headerQueue  // Cache of remote payloads received
 	localBlocks  *payloadQueue // Cache of local payloads generated
-	// Lock for the forkChoiceUpdated method
-	forkChoiceLock sync.Mutex
 }
 
 // NewConsensusAPI creates a new consensus api for the given backend.

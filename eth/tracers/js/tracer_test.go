@@ -82,17 +82,7 @@ func runTrace(tracer tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainCon
 	return tracer.GetResult()
 }
 
-type tracerCtor = func(string, *tracers.Context) (tracers.Tracer, error)
-
-func TestDuktapeTracer(t *testing.T) {
-	testTracer(t, newJsTracer)
-}
-
-func TestGojaTracer(t *testing.T) {
-	testTracer(t, newGojaTracer)
-}
-
-func testTracer(t *testing.T, newTracer tracerCtor) {
+func TestTracer(t *testing.T) {
 	execTracer := func(code string) ([]byte, string) {
 		t.Helper()
 		tracer, err := newJsTracer(code, nil, nil)
@@ -194,7 +184,7 @@ func TestHaltBetweenSteps(t *testing.T) {
 
 // testNoStepExec tests a regular value transfer (no exec), and accessing the statedb
 // in 'result'
-func testNoStepExec(t *testing.T, newTracer tracerCtor) {
+func testNoStepExec(t *testing.T) {
 	execTracer := func(code string) []byte {
 		t.Helper()
 		tracer, err := newJsTracer(code, nil, nil)
@@ -225,15 +215,7 @@ func testNoStepExec(t *testing.T, newTracer tracerCtor) {
 	}
 }
 
-func TestIsPrecompileDuktape(t *testing.T) {
-	testIsPrecompile(t, newJsTracer)
-}
-
-func TestIsPrecompileGoja(t *testing.T) {
-	testIsPrecompile(t, newGojaTracer)
-}
-
-func testIsPrecompile(t *testing.T, newTracer tracerCtor) {
+func TestIsPrecompile(t *testing.T) {
 	chaincfg := &params.ChainConfig{ChainID: big.NewInt(1), HomesteadBlock: big.NewInt(0), DAOForkBlock: nil, DAOForkSupport: false, EIP150Block: big.NewInt(0), EIP150Hash: common.Hash{}, EIP155Block: big.NewInt(0), EIP158Block: big.NewInt(0), ByzantiumBlock: big.NewInt(100), ConstantinopleBlock: big.NewInt(0), PetersburgBlock: big.NewInt(0), IstanbulBlock: big.NewInt(200), MuirGlacierBlock: big.NewInt(0), BerlinBlock: big.NewInt(300), LondonBlock: big.NewInt(0), TerminalTotalDifficulty: nil, Ethash: new(params.EthashConfig), Clique: nil}
 	chaincfg.ByzantiumBlock = big.NewInt(100)
 	chaincfg.IstanbulBlock = big.NewInt(200)
@@ -264,15 +246,7 @@ func testIsPrecompile(t *testing.T, newTracer tracerCtor) {
 	}
 }
 
-func TestEnterExitDuktape(t *testing.T) {
-	testEnterExit(t, newJsTracer)
-}
-
-func TestEnterExitGoja(t *testing.T) {
-	testEnterExit(t, newGojaTracer)
-}
-
-func testEnterExit(t *testing.T, newTracer tracerCtor) {
+func TestEnterExit(t *testing.T) {
 	// test that either both or none of enter() and exit() are defined
 	if _, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}}", new(tracers.Context), nil); err == nil {
 		t.Fatal("tracer creation should've failed without exit() definition")

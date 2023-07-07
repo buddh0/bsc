@@ -84,10 +84,7 @@ require (
 	gopkg.in/urfave/cli.v1 v1.20.0
 )
 
-require (
-	golang.org/x/mobile v0.0.0-20190719004257-d2bd2a29d028
-	gopkg.in/olebedev/go-duktape.v3 v3.0.0-20200619000410-60c24ae608a6
-)
+require golang.org/x/mobile v0.0.0-20190719004257-d2bd2a29d028
 
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.2.1 // indirect
