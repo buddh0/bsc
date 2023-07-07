@@ -82,7 +82,17 @@ func runTrace(tracer tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainCon
 	return tracer.GetResult()
 }
 
-func TestTracer(t *testing.T) {
+type tracerCtor = func(string, *tracers.Context) (tracers.Tracer, error)
+
+func TestDuktapeTracer(t *testing.T) {
+	testTracer(t, newJsTracer)
+}
+
+func TestGojaTracer(t *testing.T) {
+	testTracer(t, newGojaTracer)
+}
+
+func testTracer(t *testing.T, newTracer tracerCtor) {
 	execTracer := func(code string) ([]byte, string) {
 		t.Helper()
 		tracer, err := newJsTracer(code, nil, nil)
@@ -184,7 +194,7 @@ func TestHaltBetweenSteps(t *testing.T) {
 
 // testNoStepExec tests a regular value transfer (no exec), and accessing the statedb
 // in 'result'
-func TestNoStepExec(t *testing.T) {
+func testNoStepExec(t *testing.T, newTracer tracerCtor) {
 	execTracer := func(code string) []byte {
 		t.Helper()
 		tracer, err := newJsTracer(code, nil, nil)
@@ -215,7 +225,15 @@ func TestNoStepExec(t *testing.T) {
 	}
 }
 
-func TestIsPrecompile(t *testing.T) {
+func TestIsPrecompileDuktape(t *testing.T) {
+	testIsPrecompile(t, newJsTracer)
+}
+
+func TestIsPrecompileGoja(t *testing.T) {
+	testIsPrecompile(t, newGojaTracer)
+}
+
+func testIsPrecompile(t *testing.T, newTracer tracerCtor) {
 	chaincfg := &params.ChainConfig{ChainID: big.NewInt(1), HomesteadBlock: big.NewInt(0), DAOForkBlock: nil, DAOForkSupport: false, EIP150Block: big.NewInt(0), EIP150Hash: common.Hash{}, EIP155Block: big.NewInt(0), EIP158Block: big.NewInt(0), ByzantiumBlock: big.NewInt(100), ConstantinopleBlock: big.NewInt(0), PetersburgBlock: big.NewInt(0), IstanbulBlock: big.NewInt(200), MuirGlacierBlock: big.NewInt(0), BerlinBlock: big.NewInt(300), LondonBlock: big.NewInt(0), TerminalTotalDifficulty: nil, Ethash: new(params.EthashConfig), Clique: nil}
 	chaincfg.ByzantiumBlock = big.NewInt(100)
 	chaincfg.IstanbulBlock = big.NewInt(200)
@@ -246,7 +264,15 @@ func TestIsPrecompile(t *testing.T) {
 	}
 }
 
-func TestEnterExit(t *testing.T) {
+func TestEnterExitDuktape(t *testing.T) {
+	testEnterExit(t, newJsTracer)
+}
+
+func TestEnterExitGoja(t *testing.T) {
+	testEnterExit(t, newGojaTracer)
+}
+
+func testEnterExit(t *testing.T, newTracer tracerCtor) {
 	// test that either both or none of enter() and exit() are defined
 	if _, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}}", new(tracers.Context), nil); err == nil {
 		t.Fatal("tracer creation should've failed without exit() definition")
@@ -302,5 +328,22 @@ func TestSetup(t *testing.T) {
 	}
 	if string(have) != `"bar"` {
 		t.Errorf("tracer returned wrong result. have: %s, want: \"bar\"\n", string(have))
+	}
+}
+
+// Tests too deep object / serialization crash for duktape
+func TestRecursionLimit(t *testing.T) {
+	code := "{step: function() {}, fault: function() {}, result: function() { var o={}; var x=o; for (var i=0; i<1000; i++){  o.foo={}; o=o.foo; } return x; }}"
+	fail := "RangeError: json encode recursion limit    in server-side tracer function 'result'"
+	tracer, err := newJsTracer(code, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := ""
+	if _, err := runTrace(tracer, testCtx(), params.TestChainConfig); err != nil {
+		got = err.Error()
+	}
+	if got != fail {
+		t.Errorf("expected error to be '%s' got '%s'\n", fail, got)
 	}
 }

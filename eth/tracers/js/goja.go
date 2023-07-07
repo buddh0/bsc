@@ -64,7 +64,6 @@ func fromBuf(vm *goja.Runtime, bufType goja.Value, buf goja.Value, allowString b
 			break
 		}
 		return common.FromHex(obj.String()), nil
-
 	case "Array":
 		var b []byte
 		if err := vm.ExportTo(buf, &b); err != nil {
