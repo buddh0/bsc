@@ -165,6 +165,7 @@ var (
 		utils.GpoMaxGasPriceFlag,
 		utils.GpoIgnoreGasPriceFlag,
 		utils.MinerNotifyFullFlag,
+		utils.IgnoreLegacyReceiptsFlag,
 		configFileFlag,
 		utils.BlockAmountReserved,
 		utils.CheckSnapshotWithMPT,

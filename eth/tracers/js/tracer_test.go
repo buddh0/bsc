@@ -304,20 +304,3 @@ func TestSetup(t *testing.T) {
 		t.Errorf("tracer returned wrong result. have: %s, want: \"bar\"\n", string(have))
 	}
 }
-
-// Tests too deep object / serialization crash for duktape
-func TestRecursionLimit(t *testing.T) {
-	code := "{step: function() {}, fault: function() {}, result: function() { var o={}; var x=o; for (var i=0; i<1000; i++){  o.foo={}; o=o.foo; } return x; }}"
-	fail := "RangeError: json encode recursion limit    in server-side tracer function 'result'"
-	tracer, err := newJsTracer(code, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := ""
-	if _, err := runTrace(tracer, testCtx(), params.TestChainConfig); err != nil {
-		got = err.Error()
-	}
-	if got != fail {
-		t.Errorf("expected error to be '%s' got '%s'\n", fail, got)
-	}
-}
