@@ -182,9 +182,9 @@ func TestHaltBetweenSteps(t *testing.T) {
 	}
 }
 
-// testNoStepExec tests a regular value transfer (no exec), and accessing the statedb
+// TestNoStepExec tests a regular value transfer (no exec), and accessing the statedb
 // in 'result'
-func testNoStepExec(t *testing.T) {
+func TestNoStepExec(t *testing.T) {
 	execTracer := func(code string) []byte {
 		t.Helper()
 		tracer, err := newJsTracer(code, nil, nil)
