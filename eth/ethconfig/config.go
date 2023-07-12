@@ -147,6 +147,7 @@ type Config struct {
 	BscDiscoveryURLs   []string
 
 	NoPruning           bool // Whether to disable pruning and flush everything to disk
+	NoPrefetch          bool
 	DirectBroadcast     bool
 	DisableSnapProtocol bool //Whether disable snap protocol
 	DisableDiffProtocol bool //Whether disable diff protocol
@@ -249,7 +250,7 @@ type Config struct {
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
-func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database, ee *ethapi.PublicBlockChainAPI, genesisHash common.Hash) consensus.Engine {
+func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database, ee *ethapi.BlockChainAPI, genesisHash common.Hash) consensus.Engine {
 	if chainConfig.Parlia != nil {
 		return parlia.New(chainConfig, db, ee, genesisHash)
 	}
