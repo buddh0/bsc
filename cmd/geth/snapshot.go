@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/prometheus/tsdb/fileutil"
-	cli "gopkg.in/urfave/cli.v1"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -44,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	cli "github.com/urfave/cli/v2"
 )
 
 var (
@@ -55,18 +55,16 @@ var (
 )
 
 var (
-	snapshotCommand = cli.Command{
+	snapshotCommand = &cli.Command{
 		Name:        "snapshot",
 		Usage:       "A set of commands based on the snapshot",
-		Category:    "MISCELLANEOUS COMMANDS",
 		Description: "",
-		Subcommands: []cli.Command{
+		Subcommands: []*cli.Command{
 			{
 				Name:      "prune-state",
 				Usage:     "Prune stale ethereum state data based on the snapshot",
 				ArgsUsage: "<root>",
-				Action:    utils.MigrateFlags(pruneState),
-				Category:  "MISCELLANEOUS COMMANDS",
+				Action:    pruneState,
 				Flags: utils.GroupFlags([]cli.Flag{
 					utils.CacheTrieJournalFlag,
 					utils.BloomFilterSizeFlag,
@@ -90,7 +88,7 @@ the trie clean cache with default directory will be deleted.
 			{
 				Name:     "prune-block",
 				Usage:    "Prune block data offline",
-				Action:   utils.MigrateFlags(pruneBlock),
+				Action:   pruneBlock,
 				Category: "MISCELLANEOUS COMMANDS",
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
@@ -115,8 +113,7 @@ so it's very necessary to do block data prune, this feature will handle it.
 				Name:      "verify-state",
 				Usage:     "Recalculate state hash based on the snapshot for verification",
 				ArgsUsage: "<root>",
-				Action:    utils.MigrateFlags(verifyState),
-				Category:  "MISCELLANEOUS COMMANDS",
+				Action:    verifyState,
 				Flags:     utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth snapshot verify-state <state-root>
@@ -130,7 +127,7 @@ In other words, this command does the snapshot to trie conversion.
 				Usage: "Prune all trie state data except genesis block, it will break storage for fullnode, only suitable for fast node " +
 					"who do not need trie storage at all",
 				ArgsUsage: "<genesisPath>",
-				Action:    utils.MigrateFlags(pruneAllState),
+				Action:    pruneAllState,
 				Category:  "MISCELLANEOUS COMMANDS",
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
@@ -152,8 +149,7 @@ the trie clean cache with default directory will be deleted.
 				Name:      "check-dangling-storage",
 				Usage:     "Check that there is no 'dangling' snap storage",
 				ArgsUsage: "<root>",
-				Action:    utils.MigrateFlags(checkDanglingStorage),
-				Category:  "MISCELLANEOUS COMMANDS",
+				Action:    checkDanglingStorage,
 				Flags:     utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth snapshot check-dangling-storage <state-root> traverses the snap storage 
@@ -164,8 +160,7 @@ data, and verifies that all snapshot storage data has a corresponding account.
 				Name:      "inspect-account",
 				Usage:     "Check all snapshot layers for the a specific account",
 				ArgsUsage: "<address | hash>",
-				Action:    utils.MigrateFlags(checkAccount),
-				Category:  "MISCELLANEOUS COMMANDS",
+				Action:    checkAccount,
 				Flags:     utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth snapshot inspect-account <address | hash> checks all snapshot layers and prints out
@@ -176,8 +171,7 @@ information about the specified address.
 				Name:      "traverse-state",
 				Usage:     "Traverse the state with given root hash and perform quick verification",
 				ArgsUsage: "<root>",
-				Action:    utils.MigrateFlags(traverseState),
-				Category:  "MISCELLANEOUS COMMANDS",
+				Action:    traverseState,
 				Flags:     utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth snapshot traverse-state <state-root>
@@ -192,8 +186,7 @@ It's also usable without snapshot enabled.
 				Name:      "traverse-rawstate",
 				Usage:     "Traverse the state with given root hash and perform detailed verification",
 				ArgsUsage: "<root>",
-				Action:    utils.MigrateFlags(traverseRawState),
-				Category:  "MISCELLANEOUS COMMANDS",
+				Action:    traverseRawState,
 				Flags:     utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth snapshot traverse-rawstate <state-root>
@@ -209,8 +202,7 @@ It's also usable without snapshot enabled.
 				Name:      "dump",
 				Usage:     "Dump a specific block from storage (same as 'geth dump' but using snapshots)",
 				ArgsUsage: "[? <blockHash> | <blockNum>]",
-				Action:    utils.MigrateFlags(dumpState),
-				Category:  "MISCELLANEOUS COMMANDS",
+				Action:    dumpState,
 				Flags: utils.GroupFlags([]cli.Flag{
 					utils.ExcludeCodeFlag,
 					utils.ExcludeStorageFlag,
@@ -232,11 +224,11 @@ block is used.
 
 func accessDb(ctx *cli.Context, stack *node.Node) (ethdb.Database, error) {
 	//The layer of tries trees that keep in memory.
-	TriesInMemory := int(ctx.GlobalUint64(utils.TriesInMemoryFlag.Name))
+	TriesInMemory := int(ctx.Uint64(utils.TriesInMemoryFlag.Name))
 	chaindb := utils.MakeChainDatabase(ctx, stack, false, true)
 	defer chaindb.Close()
 
-	if !ctx.GlobalBool(utils.CheckSnapshotWithMPT.Name) {
+	if !ctx.Bool(utils.CheckSnapshotWithMPT.Name) {
 		return chaindb, nil
 	}
 	headBlock := rawdb.ReadHeadBlock(chaindb)
@@ -332,7 +324,7 @@ func pruneBlock(ctx *cli.Context) error {
 
 	stack, config = makeConfigNode(ctx)
 	defer stack.Close()
-	blockAmountReserved = ctx.GlobalUint64(utils.BlockAmountReserved.Name)
+	blockAmountReserved = ctx.Uint64(utils.BlockAmountReserved.Name)
 	chaindb, err = accessDb(ctx, stack)
 	if err != nil {
 		return err
@@ -342,20 +334,20 @@ func pruneBlock(ctx *cli.Context) error {
 	// tool are due to incorrect directory settings.Here, the default directory
 	// and relative directory are canceled, and the user is forced to formulate
 	// an absolute path to guide users to run the prune-block command correctly.
-	if !ctx.GlobalIsSet(utils.DataDirFlag.Name) {
+	if !ctx.IsSet(utils.DataDirFlag.Name) {
 		return errors.New("datadir must be set")
 	} else {
-		datadir := ctx.GlobalString(utils.DataDirFlag.Name)
+		datadir := ctx.String(utils.DataDirFlag.Name)
 		if !filepath.IsAbs(datadir) {
 			// force absolute paths, which often fail due to the splicing of relative paths
 			return errors.New("datadir not abs path")
 		}
 	}
 
-	if !ctx.GlobalIsSet(utils.AncientFlag.Name) {
+	if !ctx.IsSet(utils.AncientFlag.Name) {
 		return errors.New("datadir.ancient must be set")
 	} else {
-		oldAncientPath = ctx.GlobalString(utils.AncientFlag.Name)
+		oldAncientPath = ctx.String(utils.AncientFlag.Name)
 		if !filepath.IsAbs(oldAncientPath) {
 			// force absolute paths, which often fail due to the splicing of relative paths
 			return errors.New("datadir.ancient not abs path")
@@ -419,7 +411,7 @@ func pruneState(ctx *cli.Context) error {
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, false, false)
-	pruner, err := pruner.NewPruner(chaindb, stack.ResolvePath(""), stack.ResolvePath(config.Eth.TrieCleanCacheJournal), ctx.GlobalUint64(utils.BloomFilterSizeFlag.Name), ctx.GlobalUint64(utils.TriesInMemoryFlag.Name))
+	pruner, err := pruner.NewPruner(chaindb, stack.ResolvePath(""), stack.ResolvePath(config.Eth.TrieCleanCacheJournal), ctx.Uint64(utils.BloomFilterSizeFlag.Name), ctx.Uint64(utils.TriesInMemoryFlag.Name))
 	if err != nil {
 		log.Error("Failed to open snapshot tree", "err", err)
 		return err
@@ -430,7 +422,7 @@ func pruneState(ctx *cli.Context) error {
 	}
 	var targetRoot common.Hash
 	if ctx.NArg() == 1 {
-		targetRoot, err = parseRoot(ctx.Args()[0])
+		targetRoot, err = parseRoot(ctx.Args().First())
 		if err != nil {
 			log.Error("Failed to resolve state root", "err", err)
 			return err
@@ -506,7 +498,7 @@ func verifyState(ctx *cli.Context) error {
 	}
 	var root = headBlock.Root()
 	if ctx.NArg() == 1 {
-		root, err = parseRoot(ctx.Args()[0])
+		root, err = parseRoot(ctx.Args().First())
 		if err != nil {
 			log.Error("Failed to resolve state root", "err", err)
 			return err
@@ -551,7 +543,7 @@ func traverseState(ctx *cli.Context) error {
 		err  error
 	)
 	if ctx.NArg() == 1 {
-		root, err = parseRoot(ctx.Args()[0])
+		root, err = parseRoot(ctx.Args().First())
 		if err != nil {
 			log.Error("Failed to resolve state root", "err", err)
 			return err
@@ -640,7 +632,7 @@ func traverseRawState(ctx *cli.Context) error {
 		err  error
 	)
 	if ctx.NArg() == 1 {
-		root, err = parseRoot(ctx.Args()[0])
+		root, err = parseRoot(ctx.Args().First())
 		if err != nil {
 			log.Error("Failed to resolve state root", "err", err)
 			return err
@@ -770,7 +762,7 @@ func dumpState(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	triesInMemory := ctx.GlobalUint64(utils.TriesInMemoryFlag.Name)
+	triesInMemory := ctx.Uint64(utils.TriesInMemoryFlag.Name)
 	snaptree, err := snapshot.New(db, trie.NewDatabase(db), int(triesInMemory), 256, root, false, false, false, false)
 	if err != nil {
 		return err
@@ -843,12 +835,12 @@ func checkAccount(ctx *cli.Context) error {
 		hash common.Hash
 		addr common.Address
 	)
-	switch len(ctx.Args()[0]) {
+	switch arg := ctx.Args().First(); len(arg) {
 	case 40, 42:
-		addr = common.HexToAddress(ctx.Args()[0])
+		addr = common.HexToAddress(arg)
 		hash = crypto.Keccak256Hash(addr.Bytes())
 	case 64, 66:
-		hash = common.HexToHash(ctx.Args()[0])
+		hash = common.HexToHash(arg)
 	default:
 		return errors.New("malformed address or hash")
 	}
