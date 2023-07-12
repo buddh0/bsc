@@ -88,7 +88,6 @@ require (
 	github.com/urfave/cli/v2 v2.23.7
 	golang.org/x/mobile v0.0.0-20190719004257-d2bd2a29d028
 	golang.org/x/term v0.6.0
-	gopkg.in/urfave/cli.v1 v1.20.0
 )
 
 require (
@@ -282,4 +281,5 @@ replace (
 	github.com/grpc-ecosystem/grpc-gateway/v2 => github.com/prysmaticlabs/grpc-gateway/v2 v2.3.1-0.20210702154020-550e1cd83ec1
 	github.com/syndtr/goleveldb v1.0.1 => github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/tendermint/tendermint => github.com/bnb-chain/tendermint v0.31.15
+	github.com/urfave/cli/v2 v2.23.7 => github.com/urfave/cli/v2 v2.17.2-0.20221006022127-8f469abc00aa
 )

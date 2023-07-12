@@ -47,6 +47,7 @@ var (
 
 func init() {
 	app = flags.NewApp(gitCommit, gitDate, "a tool for submitting the evidence of malicious voting")
+	app.Name = "maliciousvote-submit"
 	app.Flags = []cli.Flag{
 		senderFlag,
 		nodeFlag,
