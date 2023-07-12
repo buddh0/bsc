@@ -169,7 +169,7 @@ func (s *StateObject) getTrie(db Database) Trie {
 		if s.data.Root != emptyRoot && prefetcher != nil {
 			// When the miner is creating the pending state, there is no
 			// prefetcher
-			s.trie = prefetcher.trie(s.data.Root)
+			s.trie = s.db.prefetcher.trie(s.addrHash, s.data.Root)
 		}
 		if s.trie == nil {
 			var err error
@@ -334,10 +334,8 @@ func (s *StateObject) finalise(prefetch bool) {
 			slotsToPrefetch = append(slotsToPrefetch, common.CopyBytes(key[:])) // Copy needed for closure
 		}
 	}
-
-	prefetcher := s.db.prefetcher
-	if prefetcher != nil && prefetch && len(slotsToPrefetch) > 0 && s.data.Root != emptyRoot {
-		prefetcher.prefetch(s.data.Root, slotsToPrefetch, s.addrHash)
+	if s.db.prefetcher != nil && prefetch && len(slotsToPrefetch) > 0 && s.data.Root != emptyRoot {
+		s.db.prefetcher.prefetch(s.addrHash, s.data.Root, slotsToPrefetch)
 	}
 	if len(s.dirtyStorage) > 0 {
 		s.dirtyStorage = make(Storage)
@@ -411,9 +409,8 @@ func (s *StateObject) updateTrie(db Database) Trie {
 	}
 	wg.Wait()
 
-	prefetcher := s.db.prefetcher
-	if prefetcher != nil {
-		prefetcher.used(s.data.Root, usedStorage)
+	if s.db.prefetcher != nil {
+		s.db.prefetcher.used(s.addrHash, s.data.Root, usedStorage)
 	}
 
 	if len(s.pendingStorage) > 0 {

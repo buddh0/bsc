@@ -135,6 +135,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 	)
 	config.LondonBlock = londonBlock
 	config.ArrowGlacierBlock = londonBlock
+	config.GrayGlacierBlock = londonBlock
 	config.GibbsBlock = nil
 	config.LubanBlock = nil
 	config.PlatoBlock = nil

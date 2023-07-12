@@ -84,7 +84,11 @@ require (
 	gopkg.in/urfave/cli.v1 v1.20.0
 )
 
-require golang.org/x/mobile v0.0.0-20190719004257-d2bd2a29d028
+require (
+	github.com/supranational/blst v0.3.8-0.20220526154634-513d2456b344
+	golang.org/x/mobile v0.0.0-20190719004257-d2bd2a29d028
+	golang.org/x/term v0.6.0
+)
 
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.2.1 // indirect
@@ -226,7 +230,6 @@ require (
 	github.com/schollz/progressbar/v3 v3.3.4 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
-	github.com/supranational/blst v0.3.8-0.20220526154634-513d2456b344 // indirect
 	github.com/thomaso-mirodin/intmath v0.0.0-20160323211736-5dc6d854e46e // indirect
 	github.com/tidwall/gjson v1.10.2 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
@@ -253,7 +256,6 @@ require (
 	golang.org/x/mod v0.8.0 // indirect
 	golang.org/x/net v0.7.0 // indirect
 	golang.org/x/oauth2 v0.3.0 // indirect
-	golang.org/x/term v0.6.0 // indirect
 	google.golang.org/api v0.34.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f // indirect

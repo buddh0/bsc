@@ -904,7 +904,7 @@ func (bc *BlockChain) SnapSyncCommitHead(hash common.Hash) error {
 	if block == nil {
 		return fmt.Errorf("non existent block [%x..]", hash[:4])
 	}
-	if _, err := trie.NewSecure(block.Root(), bc.stateCache.TrieDB()); err != nil {
+	if _, err := trie.NewSecure(common.Hash{}, block.Root(), bc.stateCache.TrieDB()); err != nil {
 		return err
 	}
 
@@ -2478,8 +2478,14 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	for _, tx := range types.HashDifference(deletedTxs, addedTxs) {
 		rawdb.DeleteTxLookupEntry(indexesBatch, tx)
 	}
-	// Delete any canonical number assignments above the new head
-	number := bc.CurrentBlock().NumberU64()
+
+	// Delete all hash markers that are not part of the new canonical chain.
+	// Because the reorg function does not handle new chain head, all hash
+	// markers greater than or equal to new chain head should be deleted.
+	number := commonBlock.NumberU64()
+	if len(newChain) > 1 {
+		number = newChain[1].NumberU64()
+	}
 	for i := number + 1; ; i++ {
 		hash := rawdb.ReadCanonicalHash(bc.db, i)
 		if hash == (common.Hash{}) {

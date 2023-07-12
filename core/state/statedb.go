@@ -281,7 +281,7 @@ func (s *StateDB) TriePrefetchInAdvance(block *types.Block, signer types.Signer)
 	}
 
 	if len(addressesToPrefetch) > 0 {
-		prefetcher.prefetch(s.originalRoot, addressesToPrefetch, emptyAddr)
+		prefetcher.prefetch(common.Hash{}, s.originalRoot, addressesToPrefetch)
 	}
 }
 
@@ -846,6 +846,7 @@ func (s *StateDB) copyInternal(doPrefetch bool) *StateDB {
 	state := &StateDB{
 		db:                  s.db,
 		trie:                s.db.CopyTrie(s.trie),
+		originalRoot:        s.originalRoot,
 		stateObjects:        make(map[common.Address]*StateObject, len(s.journal.dirties)),
 		stateObjectsPending: make(map[common.Address]struct{}, len(s.stateObjectsPending)),
 		stateObjectsDirty:   make(map[common.Address]struct{}, len(s.journal.dirties)),
@@ -1028,9 +1029,9 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 	prefetcher := s.prefetcher
 	if prefetcher != nil && len(addressesToPrefetch) > 0 {
 		if s.snap.Verified() {
-			prefetcher.prefetch(s.originalRoot, addressesToPrefetch, emptyAddr)
+			prefetcher.prefetch(common.Hash{}, s.originalRoot, addressesToPrefetch)
 		} else if prefetcher.rootParent != (common.Hash{}) {
-			prefetcher.prefetch(prefetcher.rootParent, addressesToPrefetch, emptyAddr)
+			prefetcher.prefetch(common.Hash{}, prefetcher.rootParent, addressesToPrefetch)
 		}
 	}
 	// Invalidate journal because reverting across transactions is not allowed.
@@ -1188,7 +1189,7 @@ func (s *StateDB) StateIntermediateRoot() common.Hash {
 	// _untouched_. We can check with the prefetcher, if it can give us a trie
 	// which has the same root, but also has some content loaded into it.
 	if prefetcher != nil {
-		if trie := prefetcher.trie(s.originalRoot); trie != nil {
+		if trie := prefetcher.trie(common.Hash{}, s.originalRoot); trie != nil {
 			s.trie = trie
 		}
 	}
@@ -1211,7 +1212,7 @@ func (s *StateDB) StateIntermediateRoot() common.Hash {
 			usedAddrs = append(usedAddrs, common.CopyBytes(addr[:])) // Copy needed for closure
 		}
 		if prefetcher != nil {
-			prefetcher.used(s.originalRoot, usedAddrs)
+			prefetcher.used(common.Hash{}, s.originalRoot, usedAddrs)
 		}
 	}
 
@@ -1391,6 +1392,7 @@ func (s *StateDB) Commit(failPostCommitFunc func(), postCommitFuncs ...func() er
 				return root, diff, err
 			}
 		}
+		s.originalRoot = root
 		return root, diff, nil
 	}
 	var diffLayer *types.DiffLayer
@@ -1610,6 +1612,7 @@ func (s *StateDB) Commit(failPostCommitFunc func(), postCommitFuncs ...func() er
 		root = s.expectedRoot
 	}
 
+	s.originalRoot = root
 	return root, diffLayer, nil
 }
 

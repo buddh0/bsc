@@ -281,6 +281,10 @@ var (
 		Name:  "override.arrowglacier",
 		Usage: "Manually specify Arrow Glacier fork-block, overriding the bundled setting",
 	}
+	OverrideGrayGlacierFlag = cli.Uint64Flag{
+		Name:  "override.grayglacier",
+		Usage: "Manually specify Gray Glacier fork-block, overriding the bundled setting",
+	}
 	OverrideTerminalTotalDifficulty = BigFlag{
 		Name:  "override.terminaltotaldifficulty",
 		Usage: "Manually specify TerminalTotalDifficulty, overriding the bundled setting",

@@ -299,9 +299,6 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	// apply the overrides.
 	if genesis == nil && stored != params.MainnetGenesisHash {
 		newcfg = storedcfg
-		if overrideArrowGlacier != nil {
-			newcfg.ArrowGlacierBlock = overrideArrowGlacier
-		}
 		if overrideTerminalTotalDifficulty != nil {
 			newcfg.TerminalTotalDifficulty = overrideTerminalTotalDifficulty
 		}
