@@ -819,7 +819,7 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 		return newCompatError("Gray Glacier fork block", c.GrayGlacierBlock, newcfg.GrayGlacierBlock)
 	}
 	if isForkIncompatible(c.MergeForkBlock, newcfg.MergeForkBlock, head) {
-		return newCompatError("Merge netsplit fork block", c.MergeForkBlock, newcfg.MergeForkBlock)
+		return newCompatError("Merge Start fork block", c.MergeForkBlock, newcfg.MergeForkBlock)
 	}
 	if isForkIncompatible(c.RamanujanBlock, newcfg.RamanujanBlock, head) {
 		return newCompatError("ramanujan fork block", c.RamanujanBlock, newcfg.RamanujanBlock)

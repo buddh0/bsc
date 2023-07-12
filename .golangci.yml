@@ -46,14 +46,24 @@ linters-settings:
   goconst:
     min-len: 3 # minimum length of string constant
     min-occurrences: 6 # minimum number of occurrences
-  gosec:
-    excludes:
-     - G404 # Use of weak random number generator - lots of FP
-     - G107 # Potential http request -- those are intentional
-     - G306 # G306: Expect WriteFile permissions to be 0600 or less
 
 issues:
   exclude-rules:
+     - path: crypto/blake2b/
+      linters:
+        - deadcode
+    - path: crypto/bn256/cloudflare
+      linters:
+        - deadcode
+    - path: p2p/discv5/
+      linters:
+        - deadcode
+    - path: core/vm/instructions_test.go
+      linters:
+        - goconst
+    - path: cmd/faucet/
+      linters:
+        - deadcode
     - path: crypto/bn256/cloudflare/optate.go
       linters:
         - deadcode
