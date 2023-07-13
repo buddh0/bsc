@@ -29,10 +29,11 @@ linters:
     - bidichk
     - durationcheck
     - exportloopref
+    - gosec
     - whitespace
 
-    #- structcheck # lots of false positives
-    #- errcheck #lot of false positives
+    # - structcheck # lots of false positives
+    # - errcheck #lot of false positives
     # - contextcheck
     # - errchkjson # lots of false positives
     # - errorlint # this check crashes
@@ -46,6 +47,11 @@ linters-settings:
   goconst:
     min-len: 3 # minimum length of string constant
     min-occurrences: 6 # minimum number of occurrences
+  gosec:
+    excludes:
+      - G404 # Use of weak random number generator - lots of FP
+      - G107 # Potential http request -- those are intentional
+      - G306 # G306: Expect WriteFile permissions to be 0600 or less
 
 issues:
   exclude-rules:

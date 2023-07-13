@@ -1315,7 +1315,7 @@ func (s *StateDB) LightCommit() (common.Hash, *types.DiffLayer, error) {
 
 			// commit account trie
 			var account types.StateAccount
-			root, _, err := s.trie.Commit(func(_ [][]byte, _ []byte, leaf []byte, parent common.Hash) error {
+			root, _, err := s.trie.Commit(func(_ [][]byte, _ []byte, leaf []byte, parent common.Hash, _ []byte) error {
 				if err := rlp.DecodeBytes(leaf, &account); err != nil {
 					return nil
 				}
@@ -1480,7 +1480,7 @@ func (s *StateDB) Commit(failPostCommitFunc func(), postCommitFuncs ...func() er
 			// for unmarshalling every time.
 			if !s.noTrie {
 				var account types.StateAccount
-				root, _, err := s.trie.Commit(func(_ [][]byte, _ []byte, leaf []byte, parent common.Hash) error {
+				root, _, err := s.trie.Commit(func(_ [][]byte, _ []byte, leaf []byte, parent common.Hash, _ []byte) error {
 					if err := rlp.DecodeBytes(leaf, &account); err != nil {
 						return nil
 					}

@@ -3051,7 +3051,7 @@ func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, e
 Chain config: %v
 
 Number: %v
-Hash: 0x%x
+Hash: %#x
 %v
 
 Error: %v
@@ -3226,4 +3226,12 @@ func CalculateDiffHash(d *types.DiffLayer) (common.Hash, error) {
 	var hash common.Hash
 	hasher.Sum(hash[:0])
 	return hash, nil
+}
+
+// SetBlockValidatorAndProcessorForTesting sets the current validator and processor.
+// This method can be used to force an invalid blockchain to be verified for tests.
+// This method is unsafe and should only be used before block import starts.
+func (bc *BlockChain) SetBlockValidatorAndProcessorForTesting(v Validator, p Processor) {
+	bc.validator = v
+	bc.processor = p
 }
