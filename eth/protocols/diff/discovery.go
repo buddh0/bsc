@@ -17,7 +17,17 @@
 package diff
 
 import (
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
+)
+
+var (
+	accountUpdatedMeter        = metrics.NewRegisteredMeter("state/update/account", nil)
+	storageUpdatedMeter        = metrics.NewRegisteredMeter("state/update/storage", nil)
+	accountDeletedMeter        = metrics.NewRegisteredMeter("state/delete/account", nil)
+	storageDeletedMeter        = metrics.NewRegisteredMeter("state/delete/storage", nil)
+	accountTrieCommittedMeter  = metrics.NewRegisteredMeter("state/commit/accountnodes", nil)
+	storageTriesCommittedMeter = metrics.NewRegisteredMeter("state/commit/storagenodes", nil)
 )
 
 // enrEntry is the ENR entry which advertises `diff` protocol on the discovery.

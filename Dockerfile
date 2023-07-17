@@ -17,7 +17,7 @@ ADD . /go-ethereum
 # For blst
 ENV CGO_CFLAGS="-O -D__BLST_PORTABLE__" 
 ENV CGO_CFLAGS_ALLOW="-O -D__BLST_PORTABLE__"
-RUN cd /go-ethereum && go run build/ci.go install ./cmd/geth
+RUN cd /go-ethereum && go run build/ci.go install -static ./cmd/geth
 
 # Pull Geth into a second stage deploy alpine container
 FROM alpine:3.17

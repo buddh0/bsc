@@ -69,8 +69,8 @@ func (f *prunedfreezer) repair(datadir string) error {
 	offset := atomic.LoadUint64(&f.frozen)
 	// compatible freezer
 	min := uint64(math.MaxUint64)
-	for name, disableSnappy := range FreezerNoSnappy {
-		table, err := NewFreezerTable(datadir, name, disableSnappy, false)
+	for name, disableSnappy := range chainFreezerNoSnappy {
+		table, err := newFreezerTable(datadir, name, disableSnappy, false)
 		if err != nil {
 			return err
 		}
@@ -112,7 +112,7 @@ func (f *prunedfreezer) HasAncient(kind string, number uint64) (bool, error) {
 
 // Ancient retrieves an ancient binary blob from prunedfreezer, return nil.
 func (f *prunedfreezer) Ancient(kind string, number uint64) ([]byte, error) {
-	if _, ok := FreezerNoSnappy[kind]; ok {
+	if _, ok := chainFreezerNoSnappy[kind]; ok {
 		if number >= atomic.LoadUint64(&f.frozen) {
 			return nil, errOutOfBounds
 		}
@@ -154,7 +154,7 @@ func (f *prunedfreezer) Tail() (uint64, error) {
 
 // AncientSize returns the ancient size of the specified category, return 0.
 func (f *prunedfreezer) AncientSize(kind string) (uint64, error) {
-	if _, ok := FreezerNoSnappy[kind]; ok {
+	if _, ok := chainFreezerNoSnappy[kind]; ok {
 		return 0, nil
 	}
 	return 0, errUnknownTable

@@ -195,7 +195,7 @@ func (oracle *Oracle) resolveBlockRange(ctx context.Context, reqEnd rpc.BlockNum
 		return nil, nil, 0, 0, nil
 	}
 	// Ensure not trying to retrieve before genesis.
-	if uint64(reqEnd+1) < uint64(blocks) {
+	if int(reqEnd+1) < blocks {
 		blocks = int(reqEnd + 1)
 	}
 	return pendingBlock, pendingReceipts, uint64(reqEnd), blocks, nil

@@ -19,6 +19,7 @@ package catalyst
 
 import (
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -50,6 +51,24 @@ const (
 	// invalidTipsetsCap is the max number of recent block hashes tracked that
 	// have lead to some bad ancestor block. It's just an OOM protection.
 	invalidTipsetsCap = 512
+
+	// beaconUpdateStartupTimeout is the time to wait for a beacon client to get
+	// attached before starting to issue warnings.
+	beaconUpdateStartupTimeout = 30 * time.Second
+
+	// beaconUpdateExchangeTimeout is the max time allowed for a beacon client to
+	// do a transition config exchange before it's considered offline and the user
+	// is warned.
+	beaconUpdateExchangeTimeout = 2 * time.Minute
+
+	// beaconUpdateConsensusTimeout is the max time allowed for a beacon client
+	// to send a consensus update before it's considered offline and the user is
+	// warned.
+	beaconUpdateConsensusTimeout = 30 * time.Second
+
+	// beaconUpdateWarnFrequency is the frequency at which to warn the user that
+	// the beacon client is offline.
+	beaconUpdateWarnFrequency = 5 * time.Minute
 )
 
 type ConsensusAPI struct {
@@ -81,7 +100,17 @@ type ConsensusAPI struct {
 	invalidTipsets    map[common.Hash]*types.Header // Ephemeral cache to track invalid tipsets and their bad ancestor
 	invalidLock       sync.Mutex                    // Protects the invalid maps from concurrent access
 
-	forkChoiceLock sync.Mutex // Lock for the forkChoiceUpdated method
+	// Geth can appear to be stuck or do strange things if the beacon client is
+	// offline or is sending us strange data. Stash some update stats away so
+	// that we can warn the user and not have them open issues on our tracker.
+	lastTransitionUpdate time.Time
+	lastTransitionLock   sync.Mutex
+	lastForkchoiceUpdate time.Time
+	lastForkchoiceLock   sync.Mutex
+	lastNewPayloadUpdate time.Time
+	lastNewPayloadLock   sync.Mutex
+
+	forkchoiceLock sync.Mutex // Lock for the forkChoiceUpdated method
 }
 
 // NewConsensusAPI creates a new consensus api for the given backend.

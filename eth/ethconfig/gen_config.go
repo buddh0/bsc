@@ -61,6 +61,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		TriesInMemory                   uint64
 		TriesVerifyMode                 core.VerifyMode
 		Preimages                       bool
+		FilterLogCacheSize              int
 		PersistDiff                     bool
 		DiffBlock                       uint64 `toml:",omitempty"`
 		PruneAncientData                bool
@@ -80,6 +81,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		OverrideBerlin                  *big.Int                       `toml:",omitempty"`
 		OverrideArrowGlacier            *big.Int                       `toml:",omitempty"`
 		OverrideTerminalTotalDifficulty *big.Int                       `toml:",omitempty"`
+		OverrideTerminalTotalDifficultyPassed *bool                          `toml:",omitempty"`
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -129,6 +131,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.PersistDiff = c.PersistDiff
 	enc.DiffBlock = c.DiffBlock
 	enc.PruneAncientData = c.PruneAncientData
+	enc.FilterLogCacheSize = c.FilterLogCacheSize
 	enc.Miner = c.Miner
 	enc.Ethash = c.Ethash
 	enc.TxPool = c.TxPool
@@ -140,9 +143,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.RPCTxFeeCap = c.RPCTxFeeCap
 	enc.Checkpoint = c.Checkpoint
 	enc.CheckpointOracle = c.CheckpointOracle
-	enc.OverrideBerlin = c.OverrideBerlin
-	enc.OverrideArrowGlacier = c.OverrideArrowGlacier
 	enc.OverrideTerminalTotalDifficulty = c.OverrideTerminalTotalDifficulty
+	enc.OverrideTerminalTotalDifficultyPassed = c.OverrideTerminalTotalDifficultyPassed
 	return &enc, nil
 }
 
@@ -195,6 +197,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		TriesInMemory                   *uint64
 		TriesVerifyMode                 *core.VerifyMode
 		Preimages                       *bool
+		FilterLogCacheSize 				 *int
 		Miner                           *miner.Config
 		Ethash                          *ethash.Config `toml:",omitempty"`
 		TxPool                          *core.TxPoolConfig
@@ -211,6 +214,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		OverrideBerlin                  *big.Int                       `toml:",omitempty"`
 		OverrideArrowGlacier            *big.Int                       `toml:",omitempty"`
 		OverrideTerminalTotalDifficulty *big.Int                       `toml:",omitempty"`
+		OverrideTerminalTotalDifficultyPassed *bool                      `toml:",omitempty"`
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -351,6 +355,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.Preimages != nil {
 		c.Preimages = *dec.Preimages
 	}
+	if dec.FilterLogCacheSize != nil {
+		c.FilterLogCacheSize = *dec.FilterLogCacheSize
+	}
 	if dec.Miner != nil {
 		c.Miner = *dec.Miner
 	}
@@ -384,14 +391,11 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.CheckpointOracle != nil {
 		c.CheckpointOracle = dec.CheckpointOracle
 	}
-	if dec.OverrideBerlin != nil {
-		c.OverrideBerlin = dec.OverrideBerlin
-	}
-	if dec.OverrideArrowGlacier != nil {
-		c.OverrideArrowGlacier = dec.OverrideArrowGlacier
-	}
 	if dec.OverrideTerminalTotalDifficulty != nil {
 		c.OverrideTerminalTotalDifficulty = dec.OverrideTerminalTotalDifficulty
+	}
+	if dec.OverrideTerminalTotalDifficultyPassed != nil {
+		c.OverrideTerminalTotalDifficultyPassed = dec.OverrideTerminalTotalDifficultyPassed
 	}
 	return nil
 }

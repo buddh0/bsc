@@ -659,7 +659,7 @@ func (s *StateDB) deleteStateObject(obj *StateObject) {
 	}
 	// Delete the account from the trie
 	addr := obj.Address()
-	if err := s.trie.TryDelete(addr[:]); err != nil {
+	if err := s.trie.TryDeleteAccount(addr[:]); err != nil {
 		s.setError(fmt.Errorf("deleteStateObject (%x) error: %v", addr[:], err))
 	}
 }
@@ -721,20 +721,16 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *StateObject {
 			s.trie = tr
 		}
 		start := time.Now()
-		enc, err := s.trie.TryGet(addr.Bytes())
+		var err error
+		data, err = s.trie.TryGetAccount(addr.Bytes())
 		if metrics.EnabledExpensive {
 			s.AccountReads += time.Since(start)
 		}
 		if err != nil {
-			s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %v", addr.Bytes(), err))
+			s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %w", addr.Bytes(), err))
 			return nil
 		}
-		if len(enc) == 0 {
-			return nil
-		}
-		data = new(types.StateAccount)
-		if err := rlp.DecodeBytes(enc, data); err != nil {
-			log.Error("Failed to decode state object", "addr", addr, "err", err)
+		if data == nil {
 			return nil
 		}
 	}
@@ -984,7 +980,7 @@ func (s *StateDB) WaitPipeVerification() error {
 	return nil
 }
 
-// Finalise finalises the state by removing the s destructed objects and clears
+// Finalise finalises the state by removing the destructed objects and clears
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
@@ -1006,7 +1002,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			// If state snapshotting is active, also mark the destruction there.
 			// Note, we can't do this only at the end of a block because multiple
 			// transactions within the same block might self destruct and then
-			// ressurrect an account; but the snapshotter needs both events.
+			// resurrect an account; but the snapshotter needs both events.
 			if s.snap != nil {
 				s.snapDestructs[obj.address] = struct{}{} // We need to maintain account deletions explicitly (will remain set indefinitely)
 				delete(s.snapAccounts, obj.address)       // Clear out any previously updated account data (may be recreated via a ressurrect)
@@ -1144,7 +1140,7 @@ func (s *StateDB) AccountsIntermediateRoot() {
 	// Although naively it makes sense to retrieve the account trie and then do
 	// the contract storage and account updates sequentially, that short circuits
 	// the account prefetcher. Instead, let's process all the storage updates
-	// first, giving the account prefeches just a few more milliseconds of time
+	// first, giving the account prefetches just a few more milliseconds of time
 	// to pull useful data from disk.
 	for addr := range s.stateObjectsPending {
 		if obj := s.stateObjects[addr]; !obj.deleted {
@@ -1243,7 +1239,7 @@ func (s *StateDB) clearJournalAndRefund() {
 		s.journal = newJournal()
 		s.refund = 0
 	}
-	s.validRevisions = s.validRevisions[:0] // Snapshots can be created without journal entires
+	s.validRevisions = s.validRevisions[:0] // Snapshots can be created without journal entries
 }
 
 func (s *StateDB) LightCommit() (common.Hash, *types.DiffLayer, error) {
@@ -1252,6 +1248,7 @@ func (s *StateDB) LightCommit() (common.Hash, *types.DiffLayer, error) {
 	// light process already verified it, expectedRoot is trustworthy.
 	root := s.expectedRoot
 
+	var nodes = trie.NewMergedNodeSet()
 	commitFuncs := []func() error{
 		func() error {
 			for codeHash, code := range s.diffCode {
@@ -1272,7 +1269,11 @@ func (s *StateDB) LightCommit() (common.Hash, *types.DiffLayer, error) {
 		},
 		func() error {
 			tasks := make(chan func())
-			taskResults := make(chan error, len(s.diffTries))
+			type tastResult struct {
+				err     error
+				nodeSet *trie.NodeSet
+			}
+			taskResults := make(chan tastResult, len(s.diffTries))
 			tasksNum := 0
 			finishCh := make(chan struct{})
 			defer close(finishCh)
@@ -1295,37 +1296,40 @@ func (s *StateDB) LightCommit() (common.Hash, *types.DiffLayer, error) {
 				tmpAccount := account
 				tmpDiff := diff
 				tasks <- func() {
-					root, _, err := tmpDiff.Commit(nil)
+					root, set, err := tmpDiff.Commit(true)
 					if err != nil {
-						taskResults <- err
+						taskResults <- tastResult{err, nil}
 						return
 					}
 					s.db.CacheStorage(crypto.Keccak256Hash(tmpAccount[:]), root, tmpDiff)
-					taskResults <- nil
+					taskResults <- tastResult{nil, set}
 				}
 				tasksNum++
 			}
 
 			for i := 0; i < tasksNum; i++ {
-				err := <-taskResults
-				if err != nil {
-					return err
+				res := <-taskResults
+				if res.err != nil {
+					return res.err
+				}
+				// Merge the dirty nodes of storage trie into global set
+				if res.nodeSet != nil {
+					if err := nodes.Merge(res.nodeSet); err != nil {
+						return res.err
+					}
 				}
 			}
 
 			// commit account trie
-			var account types.StateAccount
-			root, _, err := s.trie.Commit(func(_ [][]byte, _ []byte, leaf []byte, parent common.Hash, _ []byte) error {
-				if err := rlp.DecodeBytes(leaf, &account); err != nil {
-					return nil
-				}
-				if account.Root != emptyRoot {
-					s.db.TrieDB().Reference(account.Root, parent)
-				}
-				return nil
-			})
+			root, set, err := s.trie.Commit(true)
 			if err != nil {
 				return err
+			}
+			// Merge the dirty nodes of account trie into global set
+			if set != nil {
+				if err := nodes.Merge(set); err != nil {
+					return err
+				}
 			}
 			if root != emptyRoot {
 				s.db.CacheAccount(root, s.trie)
@@ -1370,6 +1374,9 @@ func (s *StateDB) LightCommit() (common.Hash, *types.DiffLayer, error) {
 	}
 	s.snap, s.snapDestructs, s.snapAccounts, s.snapStorage = nil, nil, nil, nil
 	s.diffTries, s.diffCode = nil, nil
+	if err := s.db.TrieDB().Update(nodes); err != nil {
+		return common.Hash{}, nil, err
+	}
 	return root, s.diffLayer, nil
 }
 
@@ -1398,6 +1405,7 @@ func (s *StateDB) Commit(failPostCommitFunc func(), postCommitFuncs ...func() er
 	var diffLayer *types.DiffLayer
 	var verified chan struct{}
 	var snapUpdated chan struct{}
+	var nodes = trie.NewMergedNodeSet()
 
 	if s.snap != nil {
 		diffLayer = &types.DiffLayer{}
@@ -1429,7 +1437,11 @@ func (s *StateDB) Commit(failPostCommitFunc func(), postCommitFuncs ...func() er
 			}
 
 			tasks := make(chan func())
-			taskResults := make(chan error, len(s.stateObjectsDirty))
+			type tastResult struct {
+				err     error
+				nodeSet *trie.NodeSet
+			}
+			taskResults := make(chan tastResult, len(s.stateObjectsDirty))
 			tasksNum := 0
 			finishCh := make(chan struct{})
 
@@ -1456,41 +1468,44 @@ func (s *StateDB) Commit(failPostCommitFunc func(), postCommitFuncs ...func() er
 					tasks <- func() {
 						// Write any storage changes in the state object to its storage trie
 						if !s.noTrie {
-							if _, err := obj.CommitTrie(s.db); err != nil {
-								taskResults <- err
+							if set, err := obj.CommitTrie(s.db); err != nil {
+								taskResults <- tastResult{err, nil}
 								return
+							} else {
+								taskResults <- tastResult{nil, set}
 							}
 						}
-						taskResults <- nil
+						taskResults <- tastResult{nil, nil}
 					}
 					tasksNum++
 				}
 			}
 
 			for i := 0; i < tasksNum; i++ {
-				err := <-taskResults
-				if err != nil {
+				res := <-taskResults
+				if res.err != nil {
 					close(finishCh)
-					return err
+					return res.err
+				}
+				// Merge the dirty nodes of storage trie into global set
+				if res.nodeSet != nil {
+					if err := nodes.Merge(res.nodeSet); err != nil {
+						return res.err
+					}
 				}
 			}
 			close(finishCh)
 
-			// The onleaf func is called _serially_, so we can reuse the same account
-			// for unmarshalling every time.
 			if !s.noTrie {
-				var account types.StateAccount
-				root, _, err := s.trie.Commit(func(_ [][]byte, _ []byte, leaf []byte, parent common.Hash, _ []byte) error {
-					if err := rlp.DecodeBytes(leaf, &account); err != nil {
-						return nil
-					}
-					if account.Root != emptyRoot {
-						s.db.TrieDB().Reference(account.Root, parent)
-					}
-					return nil
-				})
+				root, set, err := s.trie.Commit(true)
 				if err != nil {
 					return err
+				}
+				// Merge the dirty nodes of account trie into global set
+				if set != nil {
+					if err := nodes.Merge(set); err != nil {
+						return err
+					}
 				}
 				if root != emptyRoot {
 					s.db.CacheAccount(root, s.trie)
@@ -1612,6 +1627,9 @@ func (s *StateDB) Commit(failPostCommitFunc func(), postCommitFuncs ...func() er
 		root = s.expectedRoot
 	}
 
+	if err := s.db.TrieDB().Update(nodes); err != nil {
+		return common.Hash{}, nil, err
+	}
 	s.originalRoot = root
 	return root, diffLayer, nil
 }

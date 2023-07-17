@@ -93,7 +93,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.OverrideBerlin, config.OverrideArrowGlacier, config.OverrideTerminalTotalDifficulty)
+	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.OverrideTerminalTotalDifficulty, config.OverrideTerminalTotalDifficultyPassed)
 	if _, isCompat := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !isCompat {
 		return nil, genesisErr
 	}
@@ -300,7 +300,7 @@ func (s *LightEthereum) APIs() []rpc.API {
 			Service:   downloader.NewDownloaderAPI(s.handler.downloader, s.eventMux),
 		}, {
 			Namespace: "eth",
-			Service:   filters.NewFilterAPI(s.ApiBackend, true, 5*time.Minute, s.config.RangeLimit),
+			Service:   filters.NewFilterAPI(filters.NewFilterSystem(s.ApiBackend, filters.Config{}), true, s.config.RangeLimit),
 		}, {
 			Namespace: "net",
 			Service:   s.netRPCService,

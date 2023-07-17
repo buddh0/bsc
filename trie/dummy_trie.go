@@ -45,6 +45,10 @@ func (t *EmptyTrie) TryGet(key []byte) ([]byte, error) {
 	return nil, nil
 }
 
+func (t *EmptyTrie) TryGetAccount(key []byte) (*types.StateAccount, error) {
+	return nil, nil
+}
+
 func (t *EmptyTrie) TryGetNode(path []byte) ([]byte, int, error) {
 	return nil, 0, nil
 }
@@ -66,12 +70,16 @@ func (t *EmptyTrie) TryDelete(key []byte) error {
 	return nil
 }
 
+func (t *EmptyTrie) TryDeleteAccount(key []byte) error {
+	return nil
+}
+
 func (t *EmptyTrie) GetKey(shaKey []byte) []byte {
 	return nil
 }
 
-func (t *EmptyTrie) Commit(onleaf LeafCallback) (root common.Hash, committed int, err error) {
-	return common.Hash{}, 0, nil
+func (t *EmptyTrie) Commit(collectLeaf bool) (common.Hash, *NodeSet, error) {
+	return common.Hash{}, nil, nil
 }
 
 func (t *EmptyTrie) Hash() common.Hash {
