@@ -1315,7 +1315,7 @@ func (s *StateDB) LightCommit() (common.Hash, *types.DiffLayer, error) {
 				// Merge the dirty nodes of storage trie into global set
 				if res.nodeSet != nil {
 					if err := nodes.Merge(res.nodeSet); err != nil {
-						return res.err
+						return err
 					}
 				}
 			}
@@ -1474,8 +1474,10 @@ func (s *StateDB) Commit(failPostCommitFunc func(), postCommitFuncs ...func() er
 							} else {
 								taskResults <- tastResult{nil, set}
 							}
+						} else {
+							taskResults <- tastResult{nil, nil}
 						}
-						taskResults <- tastResult{nil, nil}
+
 					}
 					tasksNum++
 				}
@@ -1490,7 +1492,7 @@ func (s *StateDB) Commit(failPostCommitFunc func(), postCommitFuncs ...func() er
 				// Merge the dirty nodes of storage trie into global set
 				if res.nodeSet != nil {
 					if err := nodes.Merge(res.nodeSet); err != nil {
-						return res.err
+						return err
 					}
 				}
 			}

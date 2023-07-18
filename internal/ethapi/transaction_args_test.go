@@ -261,6 +261,8 @@ func (b *backendMock) SyncProgress() ethereum.SyncProgress { return ethereum.Syn
 func (b *backendMock) FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
 	return nil, nil, nil, nil, nil
 }
+
+func (b *backendMock) Chain() *core.BlockChain           { return nil }
 func (b *backendMock) ChainDb() ethdb.Database           { return nil }
 func (b *backendMock) AccountManager() *accounts.Manager { return nil }
 func (b *backendMock) ExtRPCEnabled() bool               { return false }
@@ -310,6 +312,12 @@ func (b *backendMock) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) eve
 	return nil
 }
 func (b *backendMock) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
+	return nil
+}
+func (b *backendMock) SubscribeFinalizedHeaderEvent(ch chan<- core.FinalizedHeaderEvent) event.Subscription {
+	return nil
+}
+func (b *backendMock) SubscribeNewVoteEvent(ch chan<- core.NewVoteEvent) event.Subscription {
 	return nil
 }
 func (b *backendMock) SendTx(ctx context.Context, signedTx *types.Transaction) error { return nil }

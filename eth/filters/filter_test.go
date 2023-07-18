@@ -191,7 +191,7 @@ func TestFilters(t *testing.T) {
 		t.Errorf("expected log[0].Topics[0] to be %x, got %x", hash3, logs[0].Topics[0])
 	}
 
-	filter = sys.NewRangeFilter(990,, -1, []common.Address{addr}, [][]common.Hash{{hash3}}, false)
+	filter = sys.NewRangeFilter(990, -1, []common.Address{addr}, [][]common.Hash{{hash3}}, false)
 	logs, _ = filter.Logs(context.Background())
 	if len(logs) != 1 {
 		t.Error("expected 1 log, got", len(logs))
@@ -208,7 +208,7 @@ func TestFilters(t *testing.T) {
 	}
 
 	failHash := common.BytesToHash([]byte("fail"))
-	filter =sys.NewRangeFilter(0, -1, nil, [][]common.Hash{{failHash}}, false)
+	filter = sys.NewRangeFilter(0, -1, nil, [][]common.Hash{{failHash}}, false)
 
 	logs, _ = filter.Logs(context.Background())
 	if len(logs) != 0 {
@@ -216,7 +216,7 @@ func TestFilters(t *testing.T) {
 	}
 
 	failAddr := common.BytesToAddress([]byte("failmenow"))
-	filter =  sys.NewRangeFilter(0, -1, []common.Address{failAddr}, nil, false)
+	filter = sys.NewRangeFilter(0, -1, []common.Address{failAddr}, nil, false)
 
 	logs, _ = filter.Logs(context.Background())
 	if len(logs) != 0 {

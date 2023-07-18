@@ -680,7 +680,7 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 	var (
 		db           = rawdb.NewMemoryDatabase()
 		backend, sys = newTestFilterSystem(t, db, Config{Timeout: timeout})
-		api          = NewFilterAPI(sys, false, timeout, false)
+		api          = NewFilterAPI(sys, false, false)
 		done         = make(chan struct{})
 	)
 
@@ -749,10 +749,10 @@ func TestVoteSubscription(t *testing.T) {
 	t.Parallel()
 
 	var (
-		db      = rawdb.NewMemoryDatabase()
-		backend = &testBackend{db: db}
-		api     = NewPublicFilterAPI(backend, false, deadline, false)
-		votes   = []*types.VoteEnvelope{
+		db           = rawdb.NewMemoryDatabase()
+		backend, sys = newTestFilterSystem(t, db, Config{Timeout: 5 * time.Minute})
+		api          = NewFilterAPI(sys, false, false)
+		votes        = []*types.VoteEnvelope{
 			&types.VoteEnvelope{
 				VoteAddress: types.BLSPublicKey{},
 				Signature:   types.BLSSignature{},

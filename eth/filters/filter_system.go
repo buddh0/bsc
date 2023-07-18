@@ -208,6 +208,7 @@ type EventSystem struct {
 func NewEventSystem(sys *FilterSystem, lightMode bool) *EventSystem {
 	m := &EventSystem{
 		sys:               sys,
+		backend:           sys.backend,
 		lightMode:         lightMode,
 		install:           make(chan *subscription),
 		uninstall:         make(chan *subscription),
