@@ -105,6 +105,9 @@ func (db *odrDatabase) CacheAccount(_ common.Hash, _ state.Trie) {}
 func (db *odrDatabase) CacheStorage(_ common.Hash, _ common.Hash, _ state.Trie) {}
 
 func (db *odrDatabase) Purge() {}
+func (db *odrDatabase) DiskDB() ethdb.KeyValueStore {
+	panic("not implemented")
+}
 
 type odrTrie struct {
 	db   *odrDatabase

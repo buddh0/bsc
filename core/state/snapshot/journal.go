@@ -120,7 +120,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 }
 
 // loadSnapshot loads a pre-existing state snapshot backed by a key-value store.
-func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash, recovery, withoutTrie bool) (snapshot, bool, error) {
+func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, root common.Hash, cache int, recovery bool, noBuild bool, withoutTrie bool) (snapshot, bool, error) {
 	// If snapshotting is disabled (initial sync in progress), don't do anything,
 	// wait for the chain to permit us to do something meaningful
 	if rawdb.ReadSnapshotDisabled(diskdb) {
@@ -141,7 +141,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 	snapshot, generator, err := loadAndParseJournal(diskdb, base)
 
 	if err != nil {
-		log.Warn("Failed to load new-format journal", "error", err)
+		log.Warn("Failed to load journal", "error", err)
 		return nil, false, err
 	}
 	// Entire snapshot journal loaded, sanity check the head. If the loaded
@@ -169,13 +169,16 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 		// be eventually recovered when the chain head beyonds the
 		// disk layer.
 	}
-	// Everything loaded correctly, resume any suspended operations
+	// Load the disk layer status from the generator if it's not complete
 	if !generator.Done {
-		// Whether or not wiping was in progress, load any generator progress too
 		base.genMarker = generator.Marker
 		if base.genMarker == nil {
 			base.genMarker = []byte{}
 		}
+	}
+	// Everything loaded correctly, resume any suspended operations
+	// if the background generation is allowed
+	if !generator.Done && !noBuild {
 		base.genPending = make(chan struct{})
 		base.genAbort = make(chan chan *generatorStats)
 

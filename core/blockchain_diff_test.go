@@ -207,12 +207,12 @@ func newTestBackendWithGenerator(blocks int, lightProcess bool) *testBackend {
 	// Create a database pre-initialize with a genesis block
 	db := rawdb.NewMemoryDatabase()
 	db.SetDiffStore(memorydb.New())
-	(&Genesis{
-		Config: params.TestChainConfig,
-		Alloc:  GenesisAlloc{testAddr: {Balance: big.NewInt(100000000000000000)}},
-	}).MustCommit(db)
-
-	chain, _ := NewBlockChain(db, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil, EnablePersistDiff(860000))
+	gspec := &Genesis{
+		Config:  params.TestChainConfig,
+		Alloc:   GenesisAlloc{testAddr: {Balance: big.NewInt(100000000000000000)}},
+		BaseFee: big.NewInt(params.InitialBaseFee),
+	}
+	chain, _ := NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, EnablePersistDiff(860000))
 	generator := func(i int, block *BlockGen) {
 		// The chain maker doesn't have access to a chain, so the difficulty will be
 		// lets unset (nil). Set it here to the correct value.
@@ -493,12 +493,13 @@ func newTwoForkedBlockchains(len1, len2 int) (chain1 *BlockChain, chain2 *BlockC
 	// Create a database pre-initialize with a genesis block
 	db1 := rawdb.NewMemoryDatabase()
 	db1.SetDiffStore(memorydb.New())
-	(&Genesis{
-		Config: params.TestChainConfig,
-		Alloc:  GenesisAlloc{testAddr: {Balance: big.NewInt(100000000000000000)}},
-	}).MustCommit(db1)
+	gspec := &Genesis{
+		Config:  params.TestChainConfig,
+		Alloc:   GenesisAlloc{testAddr: {Balance: big.NewInt(100000000000000000)}},
+		BaseFee: big.NewInt(params.InitialBaseFee),
+	}
 	engine1 := ethash.NewFaker()
-	chain1, _ = NewBlockChain(db1, nil, params.TestChainConfig, engine1, vm.Config{}, nil, nil, EnablePersistDiff(860000), EnableBlockValidator(params.TestChainConfig, engine1, 0, nil))
+	chain1, _ = NewBlockChain(db1, nil, gspec, nil, engine1, vm.Config{}, nil, nil, EnablePersistDiff(860000), EnableBlockValidator(params.TestChainConfig, engine1, 0, nil))
 	generator1 := func(i int, block *BlockGen) {
 		// The chain maker doesn't have access to a chain, so the difficulty will be
 		// lets unset (nil). Set it here to the correct value.
@@ -550,12 +551,13 @@ func newTwoForkedBlockchains(len1, len2 int) (chain1 *BlockChain, chain2 *BlockC
 	// Create a database pre-initialize with a genesis block
 	db2 := rawdb.NewMemoryDatabase()
 	db2.SetDiffStore(memorydb.New())
-	(&Genesis{
-		Config: params.TestChainConfig,
-		Alloc:  GenesisAlloc{testAddr: {Balance: big.NewInt(100000000000000000)}},
-	}).MustCommit(db2)
+	gspec2 := &Genesis{
+		Config:  params.TestChainConfig,
+		Alloc:   GenesisAlloc{testAddr: {Balance: big.NewInt(100000000000000000)}},
+		BaseFee: big.NewInt(params.InitialBaseFee),
+	}
 	engine2 := ethash.NewFaker()
-	chain2, _ = NewBlockChain(db2, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil, EnablePersistDiff(860000), EnableBlockValidator(params.TestChainConfig, engine2, 0, nil))
+	chain2, _ = NewBlockChain(db2, nil, gspec2, nil, ethash.NewFaker(), vm.Config{}, nil, nil, EnablePersistDiff(860000), EnableBlockValidator(params.TestChainConfig, engine2, 0, nil))
 	generator2 := func(i int, block *BlockGen) {
 		// The chain maker doesn't have access to a chain, so the difficulty will be
 		// lets unset (nil). Set it here to the correct value.

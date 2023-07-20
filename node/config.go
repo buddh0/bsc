@@ -228,7 +228,8 @@ type Config struct {
 
 	// VoteJournalDir is the directory to store votes in the fast finality feature.
 	VoteJournalDir string `toml:",omitempty"`
-	// JWTSecret is the hex-encoded jwt secret.
+
+	// JWTSecret is the path to the hex-encoded jwt secret.
 	JWTSecret string `toml:",omitempty"`
 }
 

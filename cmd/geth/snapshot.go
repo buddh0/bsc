@@ -238,7 +238,13 @@ func accessDb(ctx *cli.Context, stack *node.Node) (ethdb.Database, error) {
 	}
 	headHeader := headBlock.Header()
 	//Make sure the MPT and snapshot matches before pruning, otherwise the node can not start.
-	snaptree, err := snapshot.New(chaindb, trie.NewDatabase(chaindb), 256, TriesInMemory, headBlock.Root(), false, false, false, false)
+	snapconfig := snapshot.Config{
+		CacheSize:  256,
+		Recovery:   false,
+		NoBuild:    true,
+		AsyncBuild: false,
+	}
+	snaptree, err := snapshot.New(snapconfig, chaindb, trie.NewDatabase(chaindb), headBlock.Root(), TriesInMemory, false)
 	if err != nil {
 		log.Error("snaptree error", "err", err)
 		return nil, err // The relevant snapshot(s) might not exist
@@ -412,7 +418,14 @@ func pruneState(ctx *cli.Context) error {
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, false, false)
-	pruner, err := pruner.NewPruner(chaindb, stack.ResolvePath(""), stack.ResolvePath(config.Eth.TrieCleanCacheJournal), ctx.Uint64(utils.BloomFilterSizeFlag.Name), ctx.Uint64(utils.TriesInMemoryFlag.Name))
+	defer chaindb.Close()
+
+	prunerconfig := pruner.Config{
+		Datadir:   stack.ResolvePath(""),
+		Cachedir:  stack.ResolvePath(config.Eth.TrieCleanCacheJournal),
+		BloomSize: ctx.Uint64(utils.BloomFilterSizeFlag.Name),
+	}
+	pruner, err := pruner.NewPruner(chaindb, prunerconfig, ctx.Uint64(utils.TriesInMemoryFlag.Name))
 	if err != nil {
 		log.Error("Failed to open snapshot tree", "err", err)
 		return err
@@ -488,7 +501,13 @@ func verifyState(ctx *cli.Context) error {
 		log.Error("Failed to load head block")
 		return errors.New("no head block")
 	}
-	snaptree, err := snapshot.New(chaindb, trie.NewDatabase(chaindb), 256, 128, headBlock.Root(), false, false, false, false)
+	snapconfig := snapshot.Config{
+		CacheSize:  256,
+		Recovery:   false,
+		NoBuild:    true,
+		AsyncBuild: false,
+	}
+	snaptree, err := snapshot.New(snapconfig, chaindb, trie.NewDatabase(chaindb), headBlock.Root(), 128, false)
 	if err != nil {
 		log.Error("Failed to open snapshot tree", "err", err)
 		return err
@@ -763,8 +782,14 @@ func dumpState(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	snapConfig := snapshot.Config{
+		CacheSize:  256,
+		Recovery:   false,
+		NoBuild:    true,
+		AsyncBuild: false,
+	}
 	triesInMemory := ctx.Uint64(utils.TriesInMemoryFlag.Name)
-	snaptree, err := snapshot.New(db, trie.NewDatabase(db), int(triesInMemory), 256, root, false, false, false, false)
+	snaptree, err := snapshot.New(snapConfig, db, trie.NewDatabase(db), root, int(triesInMemory), false)
 	if err != nil {
 		return err
 	}

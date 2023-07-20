@@ -192,10 +192,10 @@ func sendMultipleSuccessfulTxs(t *utesting.T, s *Suite, txs []*types.Transaction
 	nonce = txs[len(txs)-1].Nonce()
 
 	// Wait for the transaction announcement(s) and make sure all sent txs are being propagated.
-	// all txs should be announced within 3 announcements.
+	// all txs should be announced within a couple announcements.
 	recvHashes := make([]common.Hash, 0)
 
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 20; i++ {
 		switch msg := recvConn.readAndServe(s.chain, timeout).(type) {
 		case *Transactions:
 			for _, tx := range *msg {

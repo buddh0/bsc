@@ -180,9 +180,9 @@ This tool is optional and if you leave it out you can always attach to an alread
 
 More details about [running a node](https://docs.bnbchain.org/docs/validator/fullnode) and [becoming a validator](https://docs.bnbchain.org/docs/validator/create-val)
 
-*Note: Although there are some internal protective measures to prevent transactions from
-crossing over between the main network and test network, you should make sure to always
-use separate accounts for play-money and real-money. Unless you manually move
+*Note: Although some internal protective measures prevent transactions from
+crossing over between the main network and test network, you should always
+use separate accounts for play and real money. Unless you manually move
 accounts, `geth` will by default correctly separate the two networks and will not make any
 accounts available between them.*
 
@@ -195,7 +195,7 @@ configuration file via:
 $ geth --config /path/to/your_config.toml
 ```
 
-To get an idea how the file should look like you can use the `dumpconfig` subcommand to
+To get an idea of how the file should look like you can use the `dumpconfig` subcommand to
 export your existing configuration:
 
 ```shell
@@ -249,7 +249,7 @@ APIs!**
 
 ## Contribution
 
-Thank you for considering to help out with the source code! We welcome contributions
+Thank you for considering helping out with the source code! We welcome contributions
 from anyone on the internet, and are grateful for even the smallest of fixes!
 
 If you'd like to contribute to bsc, please fork, fix, commit and send a pull request

@@ -1243,7 +1243,7 @@ func (s *StateDB) clearJournalAndRefund() {
 }
 
 func (s *StateDB) LightCommit() (common.Hash, *types.DiffLayer, error) {
-	codeWriter := s.db.TrieDB().DiskDB().NewBatch()
+	codeWriter := s.db.DiskDB().NewBatch()
 
 	// light process already verified it, expectedRoot is trustworthy.
 	root := s.expectedRoot
@@ -1542,7 +1542,7 @@ func (s *StateDB) Commit(failPostCommitFunc func(), postCommitFuncs ...func() er
 
 	commitFuncs := []func() error{
 		func() error {
-			codeWriter := s.db.TrieDB().DiskDB().NewBatch()
+			codeWriter := s.db.DiskDB().NewBatch()
 			for addr := range s.stateObjectsDirty {
 				if obj := s.stateObjects[addr]; !obj.deleted {
 					if obj.code != nil && obj.dirtyCode {

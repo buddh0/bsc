@@ -110,7 +110,6 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 			cfg.JumpTable = &copy
 		}
 		cfg.ExtraEips = extraEips
-
 	}
 	evmInterpreter := EVMInterpreterPool.Get().(*EVMInterpreter)
 	evmInterpreter.evm = evm

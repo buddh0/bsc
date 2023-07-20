@@ -21,10 +21,6 @@ import (
 )
 
 var (
-	// Git SHA1 commit hash of the release (set via linker flags)
-	gitCommit = ""
-	gitDate   = ""
-
 	app *cli.App
 
 	senderFlag = &cli.StringFlag{
@@ -46,7 +42,7 @@ var (
 )
 
 func init() {
-	app = flags.NewApp(gitCommit, gitDate, "a tool for submitting the evidence of malicious voting")
+	app = flags.NewApp("a tool for submitting the evidence of malicious voting")
 	app.Name = "maliciousvote-submit"
 	app.Flags = []cli.Flag{
 		senderFlag,

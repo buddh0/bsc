@@ -39,7 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
-	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -685,7 +684,7 @@ var (
 		Value:    strings.Join(node.DefaultConfig.AuthVirtualHosts, ","),
 		Category: flags.APICategory,
 	}
-	JWTSecretFlag = &cli.StringFlag{
+	JWTSecretFlag = &flags.DirectoryFlag{
 		Name:     "authrpc.jwtsecret",
 		Usage:    "Path to a JWT secret to use for authenticated RPC endpoints",
 		Category: flags.APICategory,
@@ -1107,9 +1106,7 @@ var (
 	// TestnetFlags is the flag group of all built-in supported testnets.
 	TestnetFlags = []cli.Flag{}
 	// NetworkFlags is the flag group of all built-in supported networks.
-	NetworkFlags = append([]cli.Flag{
-		MainnetFlag,
-	}, TestnetFlags...)
+	NetworkFlags = append([]cli.Flag{MainnetFlag}, TestnetFlags...)
 
 	// DatabasePathFlags is the flag group of all database path flags.
 	DatabasePathFlags = []cli.Flag{
@@ -1779,9 +1776,6 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	if ctx.IsSet(MinerNoVerfiyFlag.Name) {
 		cfg.Noverify = ctx.Bool(MinerNoVerfiyFlag.Name)
 	}
-	if ctx.IsSet(LegacyMinerGasTargetFlag.Name) {
-		log.Warn("The generic --miner.gastarget flag is deprecated and will be removed in the future!")
-	}
 	if ctx.Bool(VotingEnabledFlag.Name) {
 		cfg.VoteEnable = true
 	}
@@ -2326,6 +2320,16 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly, disableFree
 	return chainDb
 }
 
+func IsNetworkPreset(ctx *cli.Context) bool {
+	for _, flag := range NetworkFlags {
+		bFlag, _ := flag.(*cli.BoolFlag)
+		if ctx.IsSet(bFlag.Name) {
+			return true
+		}
+	}
+	return false
+}
+
 func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	var genesis *core.Genesis
 	switch {
@@ -2340,18 +2344,17 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 // MakeChain creates a chain manager from set command line flags.
 func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chainDb ethdb.Database) {
 	var err error
+	gspec := MakeGenesis(ctx)
 	chainDb = MakeChainDatabase(ctx, stack, false, false) // TODO(rjl493456442) support read-only database
-	config, genesisHash, err := core.SetupGenesisBlock(chainDb, MakeGenesis(ctx))
+	config, genesisHash, err := core.SetupGenesisBlock(chainDb, gspec)
 	if err != nil {
 		Fatalf("%v", err)
 	}
-
-	var engine consensus.Engine
-	ethashConf := ethconfig.Defaults.Ethash
+	ethashConfig := ethconfig.Defaults.Ethash
 	if ctx.Bool(FakePoWFlag.Name) {
-		ethashConf.PowMode = ethash.ModeFake
+		ethashConfig.PowMode = ethash.ModeFake
 	}
-	engine = ethconfig.CreateConsensusEngine(stack, config, &ethashConf, nil, false, chainDb, nil, genesisHash)
+	engine := ethconfig.CreateConsensusEngine(stack, config, &ethashConfig, nil, false, chainDb, nil, genesisHash)
 	if gcmode := ctx.String(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
@@ -2371,6 +2374,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	if !ctx.Bool(SnapshotFlag.Name) {
 		cache.SnapshotLimit = 0 // Disabled
 	}
+	// Disable snapshot generation/wiping by default
+	cache.SnapshotNoBuild = true
+
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheTrieFlag.Name) {
 		cache.TrieCleanLimit = ctx.Int(CacheFlag.Name) * ctx.Int(CacheTrieFlag.Name) / 100
 	}
@@ -2382,9 +2388,8 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	}
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name)}
 
-	// TODO(rjl493456442) disable snapshot generation/wiping if the chain is read only.
 	// Disable transaction indexing/unindexing by default.
-	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil, nil)
+	chain, err = core.NewBlockChain(chainDb, cache, gspec, nil, engine, vmcfg, nil, nil)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}

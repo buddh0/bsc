@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -303,7 +302,7 @@ func generateTestChain() []*types.Block {
 	db := rawdb.NewMemoryDatabase()
 	db.SetDiffStore(memorydb.New())
 	genesis.MustCommit(db)
-	chain, _ := core.NewBlockChain(db, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil, core.EnablePersistDiff(860000))
+	chain, _ := core.NewBlockChain(db, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, nil, core.EnablePersistDiff(860000))
 	generate := func(i int, block *core.BlockGen) {
 		block.OffsetTime(5)
 		block.SetExtra([]byte("test"))

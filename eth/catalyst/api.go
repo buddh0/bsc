@@ -111,6 +111,7 @@ type ConsensusAPI struct {
 	lastNewPayloadLock   sync.Mutex
 
 	forkchoiceLock sync.Mutex // Lock for the forkChoiceUpdated method
+	newPayloadLock sync.Mutex // Lock for the NewPayload method
 }
 
 // NewConsensusAPI creates a new consensus api for the given backend.
