@@ -173,6 +173,7 @@ func NewDatabaseWithConfigAndCache(db ethdb.Database, config *trie.Config) Datab
 
 	database := &cachingDB{
 		db:               trie.NewDatabaseWithConfig(db, config),
+		disk:             db,
 		codeSizeCache:    csc,
 		codeCache:        cc,
 		accountTrieCache: atc,

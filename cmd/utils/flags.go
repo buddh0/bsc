@@ -2342,10 +2342,12 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 }
 
 // MakeChain creates a chain manager from set command line flags.
-func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chainDb ethdb.Database) {
-	var err error
-	gspec := MakeGenesis(ctx)
-	chainDb = MakeChainDatabase(ctx, stack, false, false) // TODO(rjl493456442) support read-only database
+func MakeChain(ctx *cli.Context, stack *node.Node) (*core.BlockChain, ethdb.Database) {
+	var (
+
+		gspec   = MakeGenesis(ctx)
+		chainDb = MakeChainDatabase(ctx, stack, false, false) // TODO(rjl493456442) support read-only database
+	)
 	config, genesisHash, err := core.SetupGenesisBlock(chainDb, gspec)
 	if err != nil {
 		Fatalf("%v", err)
@@ -2389,7 +2391,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name)}
 
 	// Disable transaction indexing/unindexing by default.
-	chain, err = core.NewBlockChain(chainDb, cache, gspec, nil, engine, vmcfg, nil, nil)
+	chain, err := core.NewBlockChain(chainDb, cache, gspec, nil, engine, vmcfg, nil, nil)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}
