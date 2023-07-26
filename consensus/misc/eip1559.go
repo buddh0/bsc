@@ -28,7 +28,6 @@ import (
 // - gas limit check
 // - basefee check
 func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Header) error {
-
 	// Verify the header is not malformed
 	if header.BaseFee == nil {
 		return fmt.Errorf("header is missing baseFee")

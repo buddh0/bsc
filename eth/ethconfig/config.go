@@ -32,6 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/parlia"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -86,17 +88,12 @@ var Defaults = Config{
 	SnapshotCache:           102,
 	DiffBlock:               uint64(86400),
 	FilterLogCacheSize:      32,
-	Miner: miner.Config{
-		GasCeil:       30000000,
-		GasPrice:      big.NewInt(params.GWei),
-		Recommit:      3 * time.Second,
-		DelayLeftOver: 50 * time.Millisecond,
-	},
-	TxPool:        core.DefaultTxPoolConfig,
-	RPCGasCap:     50000000,
-	RPCEVMTimeout: 5 * time.Second,
-	GPO:           FullNodeGPO,
-	RPCTxFeeCap:   1, // 1 ether
+	Miner:                   miner.DefaultConfig,
+	TxPool:                  txpool.DefaultConfig,
+	RPCGasCap:               50000000,
+	RPCEVMTimeout:           5 * time.Second,
+	GPO:                     FullNodeGPO,
+	RPCTxFeeCap:             1, // 1 ether
 }
 
 func init() {
@@ -216,7 +213,7 @@ type Config struct {
 	Ethash ethash.Config `toml:",omitempty"`
 
 	// Transaction pool options
-	TxPool core.TxPoolConfig
+	TxPool txpool.Config
 
 	// Gas Price Oracle options
 	GPO gasprice.Config
@@ -248,6 +245,10 @@ type Config struct {
 
 	// OverrideTerminalTotalDifficultyPassed (TODO: remove after the fork)
 	OverrideTerminalTotalDifficultyPassed *bool `toml:",omitempty"`
+
+	// SyncTarget defines the target block of sync. It's only used for
+	// development purposes.
+	SyncTarget *types.Block
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

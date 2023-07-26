@@ -50,8 +50,8 @@ type prefetchMsg struct {
 // Note, the prefetcher's API is not thread safe.
 type triePrefetcher struct {
 	db         Database               // Database to fetch trie nodes through
-	root       common.Hash            // Root hash of theaccount trie for metrics
-	rootParent common.Hash            //Root has of the account trie from block before the prvious one, designed for pipecommit mode
+	root       common.Hash            // Root hash of the account trie for metrics
+	rootParent common.Hash            // Root has of the account trie from block before the prvious one, designed for pipecommit mode
 	fetches    map[string]Trie        // Partially or fully fetcher tries
 	fetchers   map[string]*subfetcher // Subfetchers for each trie
 
@@ -121,7 +121,7 @@ func (p *triePrefetcher) mainLoop() {
 			id := p.trieID(pMsg.owner, pMsg.root)
 			fetcher := p.fetchers[id]
 			if fetcher == nil {
-				fetcher = newSubfetcher(p.db, pMsg.owner, pMsg.root)
+				fetcher = newSubfetcher(p.db, p.root, pMsg.owner, pMsg.root)
 				p.fetchersMutex.Lock()
 				p.fetchers[id] = fetcher
 				p.fetchersMutex.Unlock()
@@ -348,6 +348,7 @@ func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
 // the trie being worked on is retrieved from the prefetcher.
 type subfetcher struct {
 	db    Database    // Database to load trie nodes through
+	state common.Hash // Root hash of the state to prefetch
 	owner common.Hash // Owner of the trie, usually account hash
 	root  common.Hash // Root hash of the trie to prefetch
 	trie  Trie        // Trie being populated with nodes
@@ -370,9 +371,10 @@ type subfetcher struct {
 
 // newSubfetcher creates a goroutine to prefetch state items belonging to a
 // particular root hash.
-func newSubfetcher(db Database, owner common.Hash, root common.Hash) *subfetcher {
+func newSubfetcher(db Database, state common.Hash, owner common.Hash, root common.Hash) *subfetcher {
 	sf := &subfetcher{
 		db:    db,
+		state: state,
 		owner: owner,
 		root:  root,
 		wake:  make(chan struct{}, 1),
@@ -427,7 +429,7 @@ func (sf *subfetcher) scheduleParallel(keys [][]byte) {
 	keysLeft := keys[keyIndex:]
 	keysLeftSize := len(keysLeft)
 	for i := 0; i*parallelTriePrefetchCapacity < keysLeftSize; i++ {
-		child := newSubfetcher(sf.db, sf.owner, sf.root)
+		child := newSubfetcher(sf.db, sf.state, sf.owner, sf.root)
 		sf.paraChildren = append(sf.paraChildren, child)
 		endIndex := (i + 1) * parallelTriePrefetchCapacity
 		if endIndex >= keysLeftSize {
@@ -479,8 +481,7 @@ func (sf *subfetcher) loop() {
 	if sf.owner == (common.Hash{}) {
 		trie, err = sf.db.OpenTrie(sf.root)
 	} else {
-		// address is useless
-		trie, err = sf.db.OpenStorageTrie(sf.owner, sf.root)
+		trie, err = sf.db.OpenStorageTrie(sf.state, sf.owner, sf.root)
 	}
 	if err != nil {
 		log.Debug("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
@@ -498,7 +499,7 @@ func (sf *subfetcher) loop() {
 					sf.trie, err = sf.db.OpenTrie(sf.root)
 				} else {
 					// address is useless
-					sf.trie, err = sf.db.OpenStorageTrie(sf.owner, sf.root)
+					sf.trie, err = sf.db.OpenStorageTrie(sf.state, sf.owner, sf.root)
 				}
 				if err != nil {
 					continue

@@ -96,7 +96,7 @@ type StateDB struct {
 	snapStorage    map[common.Address]map[string][]byte
 
 	// This map holds 'live' objects, which will get modified while processing a state transition.
-	stateObjects        map[common.Address]*StateObject
+	stateObjects        map[common.Address]*stateObject
 	stateObjectsPending map[common.Address]struct{} // State objects finalized but not yet written to the trie
 	stateObjectsDirty   map[common.Address]struct{} // State objects modified in the current execution
 
@@ -141,6 +141,7 @@ type StateDB struct {
 	SnapshotAccountReads time.Duration
 	SnapshotStorageReads time.Duration
 	SnapshotCommits      time.Duration
+	TrieDBCommits        time.Duration
 
 	AccountUpdated int
 	StorageUpdated int
@@ -168,7 +169,7 @@ func newStateDB(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, 
 		db:                  db,
 		originalRoot:        root,
 		snaps:               snaps,
-		stateObjects:        make(map[common.Address]*StateObject, defaultNumOfSlots),
+		stateObjects:        make(map[common.Address]*stateObject, defaultNumOfSlots),
 		stateObjectsPending: make(map[common.Address]struct{}, defaultNumOfSlots),
 		stateObjectsDirty:   make(map[common.Address]struct{}, defaultNumOfSlots),
 		logs:                make(map[common.Hash][]*types.Log, defaultNumOfSlots),
@@ -633,7 +634,7 @@ func (s *StateDB) Suicide(addr common.Address) bool {
 //
 
 // updateStateObject writes the given object to the trie.
-func (s *StateDB) updateStateObject(obj *StateObject) {
+func (s *StateDB) updateStateObject(obj *stateObject) {
 	if s.noTrie {
 		return
 	}
@@ -649,7 +650,7 @@ func (s *StateDB) updateStateObject(obj *StateObject) {
 }
 
 // deleteStateObject removes the given object from the state trie.
-func (s *StateDB) deleteStateObject(obj *StateObject) {
+func (s *StateDB) deleteStateObject(obj *stateObject) {
 	if s.noTrie {
 		return
 	}
@@ -667,7 +668,7 @@ func (s *StateDB) deleteStateObject(obj *StateObject) {
 // getStateObject retrieves a state object given by the address, returning nil if
 // the object is not found or was deleted in this execution context. If you need
 // to differentiate between non-existent/just-deleted, use getDeletedStateObject.
-func (s *StateDB) getStateObject(addr common.Address) *StateObject {
+func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	if obj := s.getDeletedStateObject(addr); obj != nil && !obj.deleted {
 		return obj
 	}
@@ -678,7 +679,7 @@ func (s *StateDB) getStateObject(addr common.Address) *StateObject {
 // nil for a deleted state object, it returns the actual object with the deleted
 // flag set. This is needed by the state journal to revert to the correct s-
 // destructed object instead of wiping all knowledge about the state object.
-func (s *StateDB) getDeletedStateObject(addr common.Address) *StateObject {
+func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 	// Prefer live objects if any is available
 	if obj := s.stateObjects[addr]; obj != nil {
 		return obj
@@ -740,12 +741,12 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *StateObject {
 	return obj
 }
 
-func (s *StateDB) SetStateObject(object *StateObject) {
+func (s *StateDB) SetStateObject(object *stateObject) {
 	s.stateObjects[object.Address()] = object
 }
 
 // GetOrNewStateObject retrieves a state object or create a new state object if nil.
-func (s *StateDB) GetOrNewStateObject(addr common.Address) *StateObject {
+func (s *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
 		stateObject, _ = s.createObject(addr)
@@ -755,7 +756,7 @@ func (s *StateDB) GetOrNewStateObject(addr common.Address) *StateObject {
 
 // createObject creates a new state object. If there is an existing account with
 // the given address, it is overwritten and returned as the second return value.
-func (s *StateDB) createObject(addr common.Address) (newobj, prev *StateObject) {
+func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
 
 	var prevdestruct bool
@@ -843,7 +844,7 @@ func (s *StateDB) copyInternal(doPrefetch bool) *StateDB {
 		db:                  s.db,
 		trie:                s.db.CopyTrie(s.trie),
 		originalRoot:        s.originalRoot,
-		stateObjects:        make(map[common.Address]*StateObject, len(s.journal.dirties)),
+		stateObjects:        make(map[common.Address]*stateObject, len(s.journal.dirties)),
 		stateObjectsPending: make(map[common.Address]struct{}, len(s.stateObjectsPending)),
 		stateObjectsDirty:   make(map[common.Address]struct{}, len(s.journal.dirties)),
 		storagePool:         s.storagePool,
@@ -862,7 +863,7 @@ func (s *StateDB) copyInternal(doPrefetch bool) *StateDB {
 		// nil
 		if object, exist := s.stateObjects[addr]; exist {
 			// Even though the original object is dirty, we are not copying the journal,
-			// so we need to make sure that anyside effect the journal would have caused
+			// so we need to make sure that any side-effect the journal would have caused
 			// during a commit (or similar op) is already applied to the copy.
 			state.stateObjects[addr] = object.deepCopy(state)
 
@@ -1005,8 +1006,8 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			// resurrect an account; but the snapshotter needs both events.
 			if s.snap != nil {
 				s.snapDestructs[obj.address] = struct{}{} // We need to maintain account deletions explicitly (will remain set indefinitely)
-				delete(s.snapAccounts, obj.address)       // Clear out any previously updated account data (may be recreated via a ressurrect)
-				delete(s.snapStorage, obj.address)        // Clear out any previously updated storage data (may be recreated via a ressurrect)
+				delete(s.snapAccounts, obj.address)       // Clear out any previously updated account data (may be recreated via a resurrect)
+				delete(s.snapStorage, obj.address)        // Clear out any previously updated storage data (may be recreated via a resurrect)
 			}
 		} else {
 			obj.finalise(true) // Prefetch slots in the background
@@ -1090,7 +1091,7 @@ func (s *StateDB) PopulateSnapAccountAndStorage() {
 }
 
 // populateSnapStorage tries to populate required storages for pipecommit, and returns a flag to indicate whether the storage root changed or not
-func (s *StateDB) populateSnapStorage(obj *StateObject) bool {
+func (s *StateDB) populateSnapStorage(obj *stateObject) bool {
 	for key, value := range obj.dirtyStorage {
 		obj.pendingStorage[key] = value
 	}
@@ -1374,8 +1375,22 @@ func (s *StateDB) LightCommit() (common.Hash, *types.DiffLayer, error) {
 	}
 	s.snap, s.snapDestructs, s.snapAccounts, s.snapStorage = nil, nil, nil, nil
 	s.diffTries, s.diffCode = nil, nil
-	if err := s.db.TrieDB().Update(nodes); err != nil {
-		return common.Hash{}, nil, err
+	if root == (common.Hash{}) {
+		root = emptyRoot
+	}
+	origin := s.originalRoot
+	if origin == (common.Hash{}) {
+		origin = emptyRoot
+	}
+	if root != origin {
+		start := time.Now()
+		if err := s.db.TrieDB().Update(nodes); err != nil {
+			return common.Hash{}, nil, err
+		}
+		s.originalRoot = root
+		if metrics.EnabledExpensive {
+			s.TrieDBCommits += time.Since(start)
+		}
 	}
 	return root, s.diffLayer, nil
 }
@@ -1468,7 +1483,7 @@ func (s *StateDB) Commit(failPostCommitFunc func(), postCommitFuncs ...func() er
 					tasks <- func() {
 						// Write any storage changes in the state object to its storage trie
 						if !s.noTrie {
-							if set, err := obj.CommitTrie(s.db); err != nil {
+							if set, err := obj.commitTrie(s.db); err != nil {
 								taskResults <- tastResult{err, nil}
 								return
 							} else {
@@ -1562,6 +1577,12 @@ func (s *StateDB) Commit(failPostCommitFunc func(), postCommitFuncs ...func() er
 						}
 					}
 				}
+				// If the contract is destructed, the storage is still left in the
+				// database as dangling data. Theoretically it's should be wiped from
+				// database as well, but in hash-based-scheme it's extremely hard to
+				// determine that if the trie nodes are also referenced by other storage,
+				// and in path-based-scheme some technical challenges are still unsolved.
+				// Although it won't affect the correctness but please fix it TODO(rjl493456442).
 			}
 			if codeWriter.ValueSize() > 0 {
 				if err := codeWriter.Write(); err != nil {
@@ -1629,10 +1650,23 @@ func (s *StateDB) Commit(failPostCommitFunc func(), postCommitFuncs ...func() er
 		root = s.expectedRoot
 	}
 
-	if err := s.db.TrieDB().Update(nodes); err != nil {
-		return common.Hash{}, nil, err
+	if root == (common.Hash{}) {
+		root = emptyRoot
 	}
-	s.originalRoot = root
+	origin := s.originalRoot
+	if origin == (common.Hash{}) {
+		origin = emptyRoot
+	}
+	if root != origin {
+		start := time.Now()
+		if err := s.db.TrieDB().Update(nodes); err != nil {
+			return common.Hash{}, nil, err
+		}
+		s.originalRoot = root
+		if metrics.EnabledExpensive {
+			s.TrieDBCommits += time.Since(start)
+		}
+	}
 	return root, diffLayer, nil
 }
 
@@ -1776,4 +1810,8 @@ func (s *StateDB) GetDirtyAccounts() []common.Address {
 
 func (s *StateDB) GetStorage(address common.Address) *sync.Map {
 	return s.storagePool.getStorage(address)
+}
+
+func (s *StateDB) GetOriginalRoot() common.Hash {
+	return s.originalRoot
 }

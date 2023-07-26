@@ -17,6 +17,8 @@ import (
 )
 
 const (
+	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
+	chainHeadChanSize = 9
 	verifiedCacheSize = 256
 	maxForkHeight     = 11
 

@@ -1828,6 +1828,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	}
 	// Pull the plug on the database, simulating a hard crash
 	db.Close()
+	chain.stopWithoutSaving()
 
 	// Start a new blockchain back up and see where the repait leads us
 	db, err = rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false, false, false, false, true)
@@ -1943,6 +1944,7 @@ func TestIssue23496(t *testing.T) {
 
 	// Pull the plug on the database, simulating a hard crash
 	db.Close()
+	chain.stopWithoutSaving()
 
 	// Start a new blockchain back up and see where the repair leads us
 	db, err = rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false, false, false, false, true)
