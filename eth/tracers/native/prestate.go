@@ -32,7 +32,7 @@ import (
 //go:generate go run github.com/fjl/gencodec -type account -field-override accountMarshaling -out gen_account_json.go
 
 func init() {
-	register("prestateTracer", newPrestateTracer)
+	tracers.DefaultDirectory.Register("prestateTracer", newPrestateTracer, false)
 }
 
 type state = map[common.Address]*account
@@ -45,7 +45,7 @@ type account struct {
 }
 
 func (a *account) exists() bool {
-	return a.Balance.Sign() != 0 || a.Nonce > 0 || len(a.Code) > 0 || len(a.Storage) > 0
+	return a.Nonce > 0 || len(a.Code) > 0 || len(a.Storage) > 0 || (a.Balance != nil && a.Balance.Sign() != 0)
 }
 
 type accountMarshaling struct {
@@ -54,6 +54,7 @@ type accountMarshaling struct {
 }
 
 type prestateTracer struct {
+	noopTracer
 	env       *vm.EVM
 	pre       state
 	post      state
@@ -164,19 +165,6 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 		t.lookupAccount(addr)
 		t.created[addr] = true
 	}
-}
-
-// CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (t *prestateTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
-}
-
-// CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *prestateTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-}
-
-// CaptureExit is called when EVM exits a scope, even if the scope didn't
-// execute any code.
-func (t *prestateTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
 func (t *prestateTracer) CaptureTxStart(gasLimit uint64) {

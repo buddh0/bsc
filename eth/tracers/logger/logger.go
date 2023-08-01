@@ -385,7 +385,7 @@ func (t *mdLogger) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope
 }
 
 func (t *mdLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
-	fmt.Fprintf(t.out, "\nOutput: `0x%x`\nConsumed gas: `%d`\nError: `%v`\n",
+	fmt.Fprintf(t.out, "\nOutput: `%#x`\nConsumed gas: `%d`\nError: `%v`\n",
 		output, gasUsed, err)
 }
 

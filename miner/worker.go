@@ -24,7 +24,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	mapset "github.com/deckarep/golang-set"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -85,11 +85,11 @@ var (
 type environment struct {
 	signer types.Signer
 
-	state     *state.StateDB // apply state changes here
-	ancestors mapset.Set     // ancestor set (used for checking uncle parent validity)
-	family    mapset.Set     // family set (used for checking uncle invalidity)
-	tcount    int            // tx count in cycle
-	gasPool   *core.GasPool  // available gas used to pack transactions
+	state     *state.StateDB          // apply state changes here
+	ancestors mapset.Set[common.Hash] // ancestor set (used for checking uncle parent validity)
+	family    mapset.Set[common.Hash] // family set (used for checking uncle invalidity)
+	tcount    int                     // tx count in cycle
+	gasPool   *core.GasPool           // available gas used to pack transactions
 	coinbase  common.Address
 
 	header   *types.Header
@@ -740,8 +740,8 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 		signer:    types.MakeSigner(w.chainConfig, header.Number),
 		state:     state,
 		coinbase:  coinbase,
-		ancestors: mapset.NewSet(),
-		family:    mapset.NewSet(),
+		ancestors: mapset.NewSet[common.Hash](),
+		family:    mapset.NewSet[common.Hash](),
 		header:    header,
 		uncles:    make(map[common.Hash]*types.Header),
 	}
@@ -883,7 +883,7 @@ LOOP:
 			continue
 		}
 		// Start executing the transaction
-		env.state.Prepare(tx.Hash(), env.tcount)
+		env.state.SetTxContext(tx.Hash(), env.tcount)
 
 		logs, err := w.commitTransaction(env, tx, bloomProcessors)
 		switch {
@@ -941,7 +941,7 @@ LOOP:
 
 // generateParams wraps various of settings for generating sealing task.
 type generateParams struct {
-	timestamp  uint64         // The timstamp for sealing task
+	timestamp  uint64         // The timestamp for sealing task
 	forceTime  bool           // Flag whether the given timestamp is immutable or not
 	parentHash common.Hash    // Parent block hash, empty means the latest chain head
 	coinbase   common.Address // The fee recipient address for including transaction
@@ -984,8 +984,8 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		Time:       timestamp,
 		Coinbase:   genParams.coinbase,
 	}
-	// Set the extra field if it's allowed.
-	if !genParams.noExtra && len(w.extra) != 0 {
+	// Set the extra field.
+	if len(w.extra) != 0 {
 		header.Extra = w.extra
 	}
 	// Set the randomness field from the beacon chain if it's available.
@@ -1327,7 +1327,6 @@ func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase 
 			coinbase:   coinbase,
 			random:     random,
 			noUncle:    true,
-			noExtra:    true,
 			noTxs:      noTxs,
 		},
 		result: make(chan *newPayloadResult, 1),

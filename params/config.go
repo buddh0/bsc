@@ -332,7 +332,7 @@ var (
 
 	TestChainConfig    = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, nil, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, big.NewInt(0), big.NewInt(0), big.NewInt(0), false, new(EthashConfig), nil, nil}
 	NonActivatedConfig = &ChainConfig{big.NewInt(1), nil, nil, false, nil, common.Hash{}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, false, new(EthashConfig), nil, nil}
-	TestRules          = TestChainConfig.Rules(new(big.Int), false)
+	TestRules          = TestChainConfig.Rules(new(big.Int), false, new(big.Int))
 )
 
 // TrustedCheckpoint represents a set of post-processed trie roots (CHT and
@@ -414,9 +414,12 @@ type ChainConfig struct {
 	LondonBlock         *big.Int `json:"londonBlock,omitempty"`         // London switch block (nil = no fork, 0 = already on london)
 	ArrowGlacierBlock   *big.Int `json:"arrowGlacierBlock,omitempty"`   // Eip-4345 (bomb delay) switch block (nil = no fork, 0 = already activated)
 	GrayGlacierBlock    *big.Int `json:"grayGlacierBlock,omitempty"`    // Eip-5133 (bomb delay) switch block (nil = no fork, 0 = already activated)
-	MergeForkBlock      *big.Int `json:"MergeForkBlock,omitempty"`      // Virtual fork after The Merge to use as a network splitter
-	ShanghaiBlock       *big.Int `json:"shanghaiBlock,omitempty"`       // Shanghai switch block (nil = no fork, 0 = already on shanghai)
+	MergeNetsplitBlock  *big.Int `json:"mergeNetsplitBlock,omitempty"`  // Virtual fork after The Merge to use as a network splitter
 	CancunBlock         *big.Int `json:"cancunBlock,omitempty"`         // Cancun switch block (nil = no fork, 0 = already on cancun)
+
+	// Fork scheduling was switched from blocks to timestamps here
+
+	ShanghaiTime *big.Int `json:"shanghaiTime,omitempty"` // Shanghai switch time (nil = no fork, 0 = already on shanghai)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -516,7 +519,7 @@ func (c *ChainConfig) String() string {
 		c.CatalystBlock,
 		c.LondonBlock,
 		c.ArrowGlacierBlock,
-		c.MergeForkBlock,
+		c.MergeNetsplitBlock,
 		c.EulerBlock,
 		c.GibbsBlock,
 		c.NanoBlock,
@@ -531,154 +534,154 @@ func (c *ChainConfig) String() string {
 
 // IsHomestead returns whether num is either equal to the homestead block or greater.
 func (c *ChainConfig) IsHomestead(num *big.Int) bool {
-	return isForked(c.HomesteadBlock, num)
+	return isBlockForked(c.HomesteadBlock, num)
 }
 
 // IsDAOFork returns whether num is either equal to the DAO fork block or greater.
 func (c *ChainConfig) IsDAOFork(num *big.Int) bool {
-	return isForked(c.DAOForkBlock, num)
+	return isBlockForked(c.DAOForkBlock, num)
 }
 
 // IsEIP150 returns whether num is either equal to the EIP150 fork block or greater.
 func (c *ChainConfig) IsEIP150(num *big.Int) bool {
-	return isForked(c.EIP150Block, num)
+	return isBlockForked(c.EIP150Block, num)
 }
 
 // IsEIP155 returns whether num is either equal to the EIP155 fork block or greater.
 func (c *ChainConfig) IsEIP155(num *big.Int) bool {
-	return isForked(c.EIP155Block, num)
+	return isBlockForked(c.EIP155Block, num)
 }
 
 // IsEIP158 returns whether num is either equal to the EIP158 fork block or greater.
 func (c *ChainConfig) IsEIP158(num *big.Int) bool {
-	return isForked(c.EIP158Block, num)
+	return isBlockForked(c.EIP158Block, num)
 }
 
 // IsByzantium returns whether num is either equal to the Byzantium fork block or greater.
 func (c *ChainConfig) IsByzantium(num *big.Int) bool {
-	return isForked(c.ByzantiumBlock, num)
+	return isBlockForked(c.ByzantiumBlock, num)
 }
 
 // IsConstantinople returns whether num is either equal to the Constantinople fork block or greater.
 func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
-	return isForked(c.ConstantinopleBlock, num)
+	return isBlockForked(c.ConstantinopleBlock, num)
 }
 
 // IsRamanujan returns whether num is either equal to the IsRamanujan fork block or greater.
 func (c *ChainConfig) IsRamanujan(num *big.Int) bool {
-	return isForked(c.RamanujanBlock, num)
+	return isBlockForked(c.RamanujanBlock, num)
 }
 
 // IsOnRamanujan returns whether num is equal to the Ramanujan fork block
 func (c *ChainConfig) IsOnRamanujan(num *big.Int) bool {
-	return configNumEqual(c.RamanujanBlock, num)
+	return configBlockEqual(c.RamanujanBlock, num)
 }
 
 // IsNiels returns whether num is either equal to the Niels fork block or greater.
 func (c *ChainConfig) IsNiels(num *big.Int) bool {
-	return isForked(c.NielsBlock, num)
+	return isBlockForked(c.NielsBlock, num)
 }
 
 // IsOnNiels returns whether num is equal to the IsNiels fork block
 func (c *ChainConfig) IsOnNiels(num *big.Int) bool {
-	return configNumEqual(c.NielsBlock, num)
+	return configBlockEqual(c.NielsBlock, num)
 }
 
 // IsMirrorSync returns whether num is either equal to the MirrorSync fork block or greater.
 func (c *ChainConfig) IsMirrorSync(num *big.Int) bool {
-	return isForked(c.MirrorSyncBlock, num)
+	return isBlockForked(c.MirrorSyncBlock, num)
 }
 
 // IsOnMirrorSync returns whether num is equal to the MirrorSync fork block
 func (c *ChainConfig) IsOnMirrorSync(num *big.Int) bool {
-	return configNumEqual(c.MirrorSyncBlock, num)
+	return configBlockEqual(c.MirrorSyncBlock, num)
 }
 
 // IsBruno returns whether num is either equal to the Burn fork block or greater.
 func (c *ChainConfig) IsBruno(num *big.Int) bool {
-	return isForked(c.BrunoBlock, num)
+	return isBlockForked(c.BrunoBlock, num)
 }
 
 // IsOnBruno returns whether num is equal to the Burn fork block
 func (c *ChainConfig) IsOnBruno(num *big.Int) bool {
-	return configNumEqual(c.BrunoBlock, num)
+	return configBlockEqual(c.BrunoBlock, num)
 }
 
 // IsEuler returns whether num is either equal to the euler fork block or greater.
 func (c *ChainConfig) IsEuler(num *big.Int) bool {
-	return isForked(c.EulerBlock, num)
+	return isBlockForked(c.EulerBlock, num)
 }
 
 // IsOnEuler returns whether num is equal to the euler fork block
 func (c *ChainConfig) IsOnEuler(num *big.Int) bool {
-	return configNumEqual(c.EulerBlock, num)
+	return configBlockEqual(c.EulerBlock, num)
 }
 
 // IsLuban returns whether num is either equal to the first fast finality fork block or greater.
 func (c *ChainConfig) IsLuban(num *big.Int) bool {
-	return isForked(c.LubanBlock, num)
+	return isBlockForked(c.LubanBlock, num)
 }
 
 // IsOnLuban returns whether num is equal to the first fast finality fork block.
 func (c *ChainConfig) IsOnLuban(num *big.Int) bool {
-	return configNumEqual(c.LubanBlock, num)
+	return configBlockEqual(c.LubanBlock, num)
 }
 
 // IsPlato returns whether num is either equal to the second fast finality fork block or greater.
 func (c *ChainConfig) IsPlato(num *big.Int) bool {
-	return isForked(c.PlatoBlock, num)
+	return isBlockForked(c.PlatoBlock, num)
 }
 
 // IsOnPlato returns whether num is equal to the second fast finality fork block.
 func (c *ChainConfig) IsOnPlato(num *big.Int) bool {
-	return configNumEqual(c.PlatoBlock, num)
+	return configBlockEqual(c.PlatoBlock, num)
 }
 
 // IsHertz returns whether num is either equal to the block of enabling Berlin EIPs or greater.
 func (c *ChainConfig) IsHertz(num *big.Int) bool {
-	return isForked(c.HertzBlock, num)
+	return isBlockForked(c.HertzBlock, num)
 }
 
 // IsOnHertz returns whether num is equal to the fork block of enabling Berlin EIPs.
 func (c *ChainConfig) IsOnHertz(num *big.Int) bool {
-	return configNumEqual(c.HertzBlock, num)
+	return configBlockEqual(c.HertzBlock, num)
 }
 
 // IsMuirGlacier returns whether num is either equal to the Muir Glacier (EIP-2384) fork block or greater.
 func (c *ChainConfig) IsMuirGlacier(num *big.Int) bool {
-	return isForked(c.MuirGlacierBlock, num)
+	return isBlockForked(c.MuirGlacierBlock, num)
 }
 
 // IsPetersburg returns whether num is either
 // - equal to or greater than the PetersburgBlock fork block,
 // - OR is nil, and Constantinople is active
 func (c *ChainConfig) IsPetersburg(num *big.Int) bool {
-	return isForked(c.PetersburgBlock, num) || c.PetersburgBlock == nil && isForked(c.ConstantinopleBlock, num)
+	return isBlockForked(c.PetersburgBlock, num) || c.PetersburgBlock == nil && isBlockForked(c.ConstantinopleBlock, num)
 }
 
 // IsIstanbul returns whether num is either equal to the Istanbul fork block or greater.
 func (c *ChainConfig) IsIstanbul(num *big.Int) bool {
-	return isForked(c.IstanbulBlock, num)
+	return isBlockForked(c.IstanbulBlock, num)
 }
 
 // IsBerlin returns whether num is either equal to the Berlin fork block or greater.
 func (c *ChainConfig) IsBerlin(num *big.Int) bool {
-	return isForked(c.BerlinBlock, num)
+	return isBlockForked(c.BerlinBlock, num)
 }
 
 // IsLondon returns whether num is either equal to the London fork block or greater.
 func (c *ChainConfig) IsLondon(num *big.Int) bool {
-	return isForked(c.LondonBlock, num)
+	return isBlockForked(c.LondonBlock, num)
 }
 
 // IsArrowGlacier returns whether num is either equal to the Arrow Glacier (EIP-4345) fork block or greater.
 func (c *ChainConfig) IsArrowGlacier(num *big.Int) bool {
-	return isForked(c.ArrowGlacierBlock, num)
+	return isBlockForked(c.ArrowGlacierBlock, num)
 }
 
 // IsGrayGlacier returns whether num is either equal to the Gray Glacier (EIP-5133) fork block or greater.
 func (c *ChainConfig) IsGrayGlacier(num *big.Int) bool {
-	return isForked(c.GrayGlacierBlock, num)
+	return isBlockForked(c.GrayGlacierBlock, num)
 }
 
 // IsTerminalPoWBlock returns whether the given block is the last block of PoW stage.
@@ -691,52 +694,69 @@ func (c *ChainConfig) IsTerminalPoWBlock(parentTotalDiff *big.Int, totalDiff *bi
 
 // IsGibbs returns whether num is either equal to the gibbs fork block or greater.
 func (c *ChainConfig) IsGibbs(num *big.Int) bool {
-	return isForked(c.GibbsBlock, num)
+	return isBlockForked(c.GibbsBlock, num)
 }
 
 // IsOnGibbs returns whether num is equal to the gibbs fork block
 func (c *ChainConfig) IsOnGibbs(num *big.Int) bool {
-	return configNumEqual(c.GibbsBlock, num)
+	return configBlockEqual(c.GibbsBlock, num)
 }
 
 func (c *ChainConfig) IsNano(num *big.Int) bool {
-	return isForked(c.NanoBlock, num)
+	return isBlockForked(c.NanoBlock, num)
 }
 
 func (c *ChainConfig) IsOnNano(num *big.Int) bool {
-	return configNumEqual(c.NanoBlock, num)
+	return configBlockEqual(c.NanoBlock, num)
 }
 
 func (c *ChainConfig) IsMoran(num *big.Int) bool {
-	return isForked(c.MoranBlock, num)
+	return isBlockForked(c.MoranBlock, num)
 }
 
 func (c *ChainConfig) IsOnMoran(num *big.Int) bool {
-	return configNumEqual(c.MoranBlock, num)
+	return configBlockEqual(c.MoranBlock, num)
 }
 
 func (c *ChainConfig) IsPlanck(num *big.Int) bool {
-	return isForked(c.PlanckBlock, num)
+	return isBlockForked(c.PlanckBlock, num)
 }
 
 func (c *ChainConfig) IsOnPlanck(num *big.Int) bool {
-	return configNumEqual(c.PlanckBlock, num)
+	return configBlockEqual(c.PlanckBlock, num)
+}
+
+// IsCancun returns whether num is either equal to the Cancun fork block or greater.
+func (c *ChainConfig) IsCancun(num *big.Int) bool {
+	return isBlockForked(c.CancunBlock, num)
+}
+
+// IsShanghai returns whether time is either equal to the Shanghai fork time or greater.
+func (c *ChainConfig) IsShanghai(time *big.Int) bool {
+	return isTimestampForked(c.ShanghaiTime, time)
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
 // with a mismatching chain configuration.
-func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64) *ConfigCompatError {
-	bhead := new(big.Int).SetUint64(height)
-
+func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64, time uint64) *ConfigCompatError {
+	var (
+		bhead = new(big.Int).SetUint64(height)
+		btime = new(big.Int).SetUint64(time)
+	)
 	// Iterate checkCompatible to find the lowest conflict.
 	var lasterr *ConfigCompatError
 	for {
-		err := c.checkCompatible(newcfg, bhead)
-		if err == nil || (lasterr != nil && err.RewindTo == lasterr.RewindTo) {
+		err := c.checkCompatible(newcfg, bhead, btime)
+		if err == nil || (lasterr != nil && err.RewindToBlock == lasterr.RewindToBlock && err.RewindToTime == lasterr.RewindToTime) {
 			break
 		}
 		lasterr = err
-		bhead.SetUint64(err.RewindTo)
+
+		if err.RewindToTime > 0 {
+			btime.SetUint64(err.RewindToTime)
+		} else {
+			bhead.SetUint64(err.RewindToBlock)
+		}
 	}
 	return lasterr
 }
@@ -745,9 +765,10 @@ func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64) *Confi
 // to guarantee that forks can be implemented in a different order than on official networks
 func (c *ChainConfig) CheckConfigForkOrder() error {
 	type fork struct {
-		name     string
-		block    *big.Int
-		optional bool // if true, the fork may be nil and next fork is still allowed
+		name      string
+		block     *big.Int // forks up to - and including the merge - were defined with block numbers
+		timestamp *big.Int // forks after the merge are scheduled using timestamps
+		optional  bool     // if true, the fork may be nil and next fork is still allowed
 	}
 	var lastFork fork
 	for _, cur := range []fork{
@@ -758,122 +779,140 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "lubanBlock", block: c.LubanBlock},
 		{name: "platoBlock", block: c.PlatoBlock},
 		{name: "hertzBlock", block: c.HertzBlock},
+		{name: "cancunBlock", block: c.CancunBlock, optional: true},
+		{name: "shanghaiTime", timestamp: c.ShanghaiTime},
 	} {
 		if lastFork.name != "" {
-			// Next one must be higher number
-			if lastFork.block == nil && cur.block != nil {
-				return fmt.Errorf("unsupported fork ordering: %v not enabled, but %v enabled at %v",
-					lastFork.name, cur.name, cur.block)
-			}
-			if lastFork.block != nil && cur.block != nil {
-				if lastFork.block.Cmp(cur.block) > 0 {
-					return fmt.Errorf("unsupported fork ordering: %v enabled at %v, but %v enabled at %v",
+			switch {
+			// Non-optional forks must all be present in the chain config up to the last defined fork
+			case lastFork.block == nil && lastFork.timestamp == nil && (cur.block != nil || cur.timestamp != nil):
+				if cur.block != nil {
+					return fmt.Errorf("unsupported fork ordering: %v not enabled, but %v enabled at block %v",
+						lastFork.name, cur.name, cur.block)
+				} else {
+					return fmt.Errorf("unsupported fork ordering: %v not enabled, but %v enabled at timestamp %v",
+						lastFork.name, cur.name, cur.timestamp)
+				}
+
+			// Fork (whether defined by block or timestamp) must follow the fork definition sequence
+			case (lastFork.block != nil && cur.block != nil) || (lastFork.timestamp != nil && cur.timestamp != nil):
+				if lastFork.block != nil && lastFork.block.Cmp(cur.block) > 0 {
+					return fmt.Errorf("unsupported fork ordering: %v enabled at block %v, but %v enabled at block %v",
 						lastFork.name, lastFork.block, cur.name, cur.block)
+				} else if lastFork.timestamp != nil && lastFork.timestamp.Cmp(cur.timestamp) > 0 {
+					return fmt.Errorf("unsupported fork ordering: %v enabled at timestamp %v, but %v enabled at timestamp %v",
+						lastFork.name, lastFork.timestamp, cur.name, cur.timestamp)
+				}
+
+				// Timestamp based forks can follow block based ones, but not the other way around
+				if lastFork.timestamp != nil && cur.block != nil {
+					return fmt.Errorf("unsupported fork ordering: %v used timestamp ordering, but %v reverted to block ordering",
+						lastFork.name, cur.name)
 				}
 			}
 		}
 		// If it was optional and not set, then ignore it
-		if !cur.optional || cur.block != nil {
+		if !cur.optional || (cur.block != nil || cur.timestamp != nil) {
 			lastFork = cur
 		}
 	}
 	return nil
 }
 
-func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *ConfigCompatError {
-	if isForkIncompatible(c.HomesteadBlock, newcfg.HomesteadBlock, head) {
-		return newCompatError("Homestead fork block", c.HomesteadBlock, newcfg.HomesteadBlock)
+func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, headTimestamp *big.Int) *ConfigCompatError {
+	if isForkBlockIncompatible(c.HomesteadBlock, newcfg.HomesteadBlock, headNumber) {
+		return newBlockCompatError("Homestead fork block", c.HomesteadBlock, newcfg.HomesteadBlock)
 	}
-	if isForkIncompatible(c.DAOForkBlock, newcfg.DAOForkBlock, head) {
-		return newCompatError("DAO fork block", c.DAOForkBlock, newcfg.DAOForkBlock)
+	if isForkBlockIncompatible(c.DAOForkBlock, newcfg.DAOForkBlock, headNumber) {
+		return newBlockCompatError("DAO fork block", c.DAOForkBlock, newcfg.DAOForkBlock)
 	}
-	if c.IsDAOFork(head) && c.DAOForkSupport != newcfg.DAOForkSupport {
-		return newCompatError("DAO fork support flag", c.DAOForkBlock, newcfg.DAOForkBlock)
+	if c.IsDAOFork(headNumber) && c.DAOForkSupport != newcfg.DAOForkSupport {
+		return newBlockCompatError("DAO fork support flag", c.DAOForkBlock, newcfg.DAOForkBlock)
 	}
-	if isForkIncompatible(c.EIP150Block, newcfg.EIP150Block, head) {
-		return newCompatError("EIP150 fork block", c.EIP150Block, newcfg.EIP150Block)
+	if isForkBlockIncompatible(c.EIP150Block, newcfg.EIP150Block, headNumber) {
+		return newBlockCompatError("EIP150 fork block", c.EIP150Block, newcfg.EIP150Block)
 	}
-	if isForkIncompatible(c.EIP155Block, newcfg.EIP155Block, head) {
-		return newCompatError("EIP155 fork block", c.EIP155Block, newcfg.EIP155Block)
+	if isForkBlockIncompatible(c.EIP155Block, newcfg.EIP155Block, headNumber) {
+		return newBlockCompatError("EIP155 fork block", c.EIP155Block, newcfg.EIP155Block)
 	}
-	if isForkIncompatible(c.EIP158Block, newcfg.EIP158Block, head) {
-		return newCompatError("EIP158 fork block", c.EIP158Block, newcfg.EIP158Block)
+	if isForkBlockIncompatible(c.EIP158Block, newcfg.EIP158Block, headNumber) {
+		return newBlockCompatError("EIP158 fork block", c.EIP158Block, newcfg.EIP158Block)
 	}
-	if c.IsEIP158(head) && !configNumEqual(c.ChainID, newcfg.ChainID) {
-		return newCompatError("EIP158 chain ID", c.EIP158Block, newcfg.EIP158Block)
+	if c.IsEIP158(headNumber) && !configBlockEqual(c.ChainID, newcfg.ChainID) {
+		return newBlockCompatError("EIP158 chain ID", c.EIP158Block, newcfg.EIP158Block)
 	}
-	if isForkIncompatible(c.ByzantiumBlock, newcfg.ByzantiumBlock, head) {
-		return newCompatError("Byzantium fork block", c.ByzantiumBlock, newcfg.ByzantiumBlock)
+	if isForkBlockIncompatible(c.ByzantiumBlock, newcfg.ByzantiumBlock, headNumber) {
+		return newBlockCompatError("Byzantium fork block", c.ByzantiumBlock, newcfg.ByzantiumBlock)
 	}
-	if isForkIncompatible(c.ConstantinopleBlock, newcfg.ConstantinopleBlock, head) {
-		return newCompatError("Constantinople fork block", c.ConstantinopleBlock, newcfg.ConstantinopleBlock)
+	if isForkBlockIncompatible(c.ConstantinopleBlock, newcfg.ConstantinopleBlock, headNumber) {
+		return newBlockCompatError("Constantinople fork block", c.ConstantinopleBlock, newcfg.ConstantinopleBlock)
 	}
-	if isForkIncompatible(c.PetersburgBlock, newcfg.PetersburgBlock, head) {
+	if isForkBlockIncompatible(c.PetersburgBlock, newcfg.PetersburgBlock, headNumber) {
 		// the only case where we allow Petersburg to be set in the past is if it is equal to Constantinople
 		// mainly to satisfy fork ordering requirements which state that Petersburg fork be set if Constantinople fork is set
-		if isForkIncompatible(c.ConstantinopleBlock, newcfg.PetersburgBlock, head) {
-			return newCompatError("Petersburg fork block", c.PetersburgBlock, newcfg.PetersburgBlock)
+		if isForkBlockIncompatible(c.ConstantinopleBlock, newcfg.PetersburgBlock, headNumber) {
+			return newBlockCompatError("Petersburg fork block", c.PetersburgBlock, newcfg.PetersburgBlock)
 		}
 	}
-	if isForkIncompatible(c.IstanbulBlock, newcfg.IstanbulBlock, head) {
-		return newCompatError("Istanbul fork block", c.IstanbulBlock, newcfg.IstanbulBlock)
+	if isForkBlockIncompatible(c.IstanbulBlock, newcfg.IstanbulBlock, headNumber) {
+		return newBlockCompatError("Istanbul fork block", c.IstanbulBlock, newcfg.IstanbulBlock)
 	}
-	if isForkIncompatible(c.MuirGlacierBlock, newcfg.MuirGlacierBlock, head) {
-		return newCompatError("Muir Glacier fork block", c.MuirGlacierBlock, newcfg.MuirGlacierBlock)
+	if isForkBlockIncompatible(c.MuirGlacierBlock, newcfg.MuirGlacierBlock, headNumber) {
+		return newBlockCompatError("Muir Glacier fork block", c.MuirGlacierBlock, newcfg.MuirGlacierBlock)
 	}
-	if isForkIncompatible(c.BerlinBlock, newcfg.BerlinBlock, head) {
-		return newCompatError("Berlin fork block", c.BerlinBlock, newcfg.BerlinBlock)
+	if isForkBlockIncompatible(c.BerlinBlock, newcfg.BerlinBlock, headNumber) {
+		return newBlockCompatError("Berlin fork block", c.BerlinBlock, newcfg.BerlinBlock)
 	}
-	if isForkIncompatible(c.LondonBlock, newcfg.LondonBlock, head) {
-		return newCompatError("London fork block", c.LondonBlock, newcfg.LondonBlock)
+	if isForkBlockIncompatible(c.LondonBlock, newcfg.LondonBlock, headNumber) {
+		return newBlockCompatError("London fork block", c.LondonBlock, newcfg.LondonBlock)
 	}
-	if isForkIncompatible(c.ArrowGlacierBlock, newcfg.ArrowGlacierBlock, head) {
-		return newCompatError("Arrow Glacier fork block", c.ArrowGlacierBlock, newcfg.ArrowGlacierBlock)
+	if isForkBlockIncompatible(c.ArrowGlacierBlock, newcfg.ArrowGlacierBlock, headNumber) {
+		return newBlockCompatError("Arrow Glacier fork block", c.ArrowGlacierBlock, newcfg.ArrowGlacierBlock)
 	}
-	if isForkIncompatible(c.GrayGlacierBlock, newcfg.GrayGlacierBlock, head) {
-		return newCompatError("Gray Glacier fork block", c.GrayGlacierBlock, newcfg.GrayGlacierBlock)
+	if isForkBlockIncompatible(c.GrayGlacierBlock, newcfg.GrayGlacierBlock, headNumber) {
+		return newBlockCompatError("Gray Glacier fork block", c.GrayGlacierBlock, newcfg.GrayGlacierBlock)
 	}
-	if isForkIncompatible(c.MergeForkBlock, newcfg.MergeForkBlock, head) {
-		return newCompatError("Merge Start fork block", c.MergeForkBlock, newcfg.MergeForkBlock)
+	if isForkBlockIncompatible(c.MergeNetsplitBlock, newcfg.MergeNetsplitBlock, headNumber) {
+		return newBlockCompatError("Merge Start fork block", c.MergeNetsplitBlock, newcfg.MergeNetsplitBlock)
 	}
-	if isForkIncompatible(c.RamanujanBlock, newcfg.RamanujanBlock, head) {
-		return newCompatError("ramanujan fork block", c.RamanujanBlock, newcfg.RamanujanBlock)
+	if isForkBlockIncompatible(c.RamanujanBlock, newcfg.RamanujanBlock, headNumber) {
+		return newBlockCompatError("ramanujan fork block", c.RamanujanBlock, newcfg.RamanujanBlock)
 	}
-	if isForkIncompatible(c.MirrorSyncBlock, newcfg.MirrorSyncBlock, head) {
-		return newCompatError("mirrorSync fork block", c.MirrorSyncBlock, newcfg.MirrorSyncBlock)
+	if isForkBlockIncompatible(c.MirrorSyncBlock, newcfg.MirrorSyncBlock, headNumber) {
+		return newBlockCompatError("mirrorSync fork block", c.MirrorSyncBlock, newcfg.MirrorSyncBlock)
 	}
-	if isForkIncompatible(c.BrunoBlock, newcfg.BrunoBlock, head) {
-		return newCompatError("bruno fork block", c.BrunoBlock, newcfg.BrunoBlock)
+	if isForkBlockIncompatible(c.BrunoBlock, newcfg.BrunoBlock, headNumber) {
+		return newBlockCompatError("bruno fork block", c.BrunoBlock, newcfg.BrunoBlock)
 	}
-	if isForkIncompatible(c.EulerBlock, newcfg.EulerBlock, head) {
-		return newCompatError("euler fork block", c.EulerBlock, newcfg.EulerBlock)
+	if isForkBlockIncompatible(c.EulerBlock, newcfg.EulerBlock, headNumber) {
+		return newBlockCompatError("euler fork block", c.EulerBlock, newcfg.EulerBlock)
 	}
-	if isForkIncompatible(c.GibbsBlock, newcfg.GibbsBlock, head) {
-		return newCompatError("gibbs fork block", c.GibbsBlock, newcfg.GibbsBlock)
+	if isForkBlockIncompatible(c.GibbsBlock, newcfg.GibbsBlock, headNumber) {
+		return newBlockCompatError("gibbs fork block", c.GibbsBlock, newcfg.GibbsBlock)
 	}
-	if isForkIncompatible(c.NanoBlock, newcfg.NanoBlock, head) {
-		return newCompatError("nano fork block", c.NanoBlock, newcfg.NanoBlock)
+	if isForkBlockIncompatible(c.NanoBlock, newcfg.NanoBlock, headNumber) {
+		return newBlockCompatError("nano fork block", c.NanoBlock, newcfg.NanoBlock)
 	}
-	if isForkIncompatible(c.MoranBlock, newcfg.MoranBlock, head) {
-		return newCompatError("moran fork block", c.MoranBlock, newcfg.MoranBlock)
+	if isForkBlockIncompatible(c.MoranBlock, newcfg.MoranBlock, headNumber) {
+		return newBlockCompatError("moran fork block", c.MoranBlock, newcfg.MoranBlock)
 	}
-	if isForkIncompatible(c.PlanckBlock, newcfg.PlanckBlock, head) {
-		return newCompatError("planck fork block", c.PlanckBlock, newcfg.PlanckBlock)
+	if isForkBlockIncompatible(c.PlanckBlock, newcfg.PlanckBlock, headNumber) {
+		return newBlockCompatError("planck fork block", c.PlanckBlock, newcfg.PlanckBlock)
 	}
-	if isForkIncompatible(c.LubanBlock, newcfg.LubanBlock, head) {
-		return newCompatError("luban fork block", c.LubanBlock, newcfg.LubanBlock)
+	if isForkBlockIncompatible(c.LubanBlock, newcfg.LubanBlock, headNumber) {
+		return newBlockCompatError("luban fork block", c.LubanBlock, newcfg.LubanBlock)
 	}
-	if isForkIncompatible(c.PlatoBlock, newcfg.PlatoBlock, head) {
-		return newCompatError("plato fork block", c.PlatoBlock, newcfg.PlatoBlock)
+	if isForkBlockIncompatible(c.PlatoBlock, newcfg.PlatoBlock, headNumber) {
+		return newBlockCompatError("plato fork block", c.PlatoBlock, newcfg.PlatoBlock)
 	}
-	if isForkIncompatible(c.HertzBlock, newcfg.HertzBlock, head) {
-		return newCompatError("hertz fork block", c.HertzBlock, newcfg.HertzBlock)
+	if isForkBlockIncompatible(c.HertzBlock, newcfg.HertzBlock, headNumber) {
+		return newBlockCompatError("hertz fork block", c.HertzBlock, newcfg.HertzBlock)
 	}
-	if isForkIncompatible(c.ShanghaiBlock, newcfg.ShanghaiBlock, head) {
-		return newCompatError("Shanghai fork block", c.ShanghaiBlock, newcfg.ShanghaiBlock)
+	if isForkBlockIncompatible(c.CancunBlock, newcfg.CancunBlock, headNumber) {
+		return newBlockCompatError("Cancun fork block", c.CancunBlock, newcfg.CancunBlock)
 	}
-	if isForkIncompatible(c.CancunBlock, newcfg.CancunBlock, head) {
-		return newCompatError("Cancun fork block", c.CancunBlock, newcfg.CancunBlock)
+	if isForkTimestampIncompatible(c.ShanghaiTime, newcfg.ShanghaiTime, headTimestamp) {
+		return newTimestampCompatError("Shanghai fork timestamp", c.ShanghaiTime, newcfg.ShanghaiTime)
 	}
 	return nil
 }
@@ -888,21 +927,49 @@ func (c *ChainConfig) ElasticityMultiplier() uint64 {
 	return DefaultElasticityMultiplier
 }
 
-// isForkIncompatible returns true if a fork scheduled at s1 cannot be rescheduled to
-// block s2 because head is already past the fork.
-func isForkIncompatible(s1, s2, head *big.Int) bool {
-	return (isForked(s1, head) || isForked(s2, head)) && !configNumEqual(s1, s2)
+// isForkBlockIncompatible returns true if a fork scheduled at block s1 cannot be
+// rescheduled to block s2 because head is already past the fork.
+func isForkBlockIncompatible(s1, s2, head *big.Int) bool {
+	return (isBlockForked(s1, head) || isBlockForked(s2, head)) && !configBlockEqual(s1, s2)
 }
 
-// isForked returns whether a fork scheduled at block s is active at the given head block.
-func isForked(s, head *big.Int) bool {
+// isBlockForked returns whether a fork scheduled at block s is active at the
+// given head block. Whilst this method is the same as isTimestampForked, they
+// are explicitly separate for clearer reading.
+func isBlockForked(s, head *big.Int) bool {
 	if s == nil || head == nil {
 		return false
 	}
 	return s.Cmp(head) <= 0
 }
 
-func configNumEqual(x, y *big.Int) bool {
+func configBlockEqual(x, y *big.Int) bool {
+	if x == nil {
+		return y == nil
+	}
+	if y == nil {
+		return x == nil
+	}
+	return x.Cmp(y) == 0
+}
+
+// isForkTimestampIncompatible returns true if a fork scheduled at timestamp s1
+// cannot be rescheduled to timestamp s2 because head is already past the fork.
+func isForkTimestampIncompatible(s1, s2, head *big.Int) bool {
+	return (isTimestampForked(s1, head) || isTimestampForked(s2, head)) && !configTimestampEqual(s1, s2)
+}
+
+// isTimestampForked returns whether a fork scheduled at timestamp s is active
+// at the given head timestamp. Whilst this method is the same as isBlockForked,
+// they are explicitly separate for clearer reading.
+func isTimestampForked(s, head *big.Int) bool {
+	if s == nil || head == nil {
+		return false
+	}
+	return s.Cmp(head) <= 0
+}
+
+func configTimestampEqual(x, y *big.Int) bool {
 	if x == nil {
 		return y == nil
 	}
@@ -916,13 +983,21 @@ func configNumEqual(x, y *big.Int) bool {
 // ChainConfig that would alter the past.
 type ConfigCompatError struct {
 	What string
-	// block numbers of the stored and new configurations
-	StoredConfig, NewConfig *big.Int
+
+	// block numbers of the stored and new configurations if block based forking
+	StoredBlock, NewBlock *big.Int
+
+	// timestamps of the stored and new configurations if time based forking
+	StoredTime, NewTime *big.Int
+
 	// the block number to which the local chain must be rewound to correct the error
-	RewindTo uint64
+	RewindToBlock uint64
+
+	// the timestamp to which the local chain must be rewound to correct the error
+	RewindToTime uint64
 }
 
-func newCompatError(what string, storedblock, newblock *big.Int) *ConfigCompatError {
+func newBlockCompatError(what string, storedblock, newblock *big.Int) *ConfigCompatError {
 	var rew *big.Int
 	switch {
 	case storedblock == nil:
@@ -932,15 +1007,45 @@ func newCompatError(what string, storedblock, newblock *big.Int) *ConfigCompatEr
 	default:
 		rew = newblock
 	}
-	err := &ConfigCompatError{what, storedblock, newblock, 0}
+	err := &ConfigCompatError{
+		What:          what,
+		StoredBlock:   storedblock,
+		NewBlock:      newblock,
+		RewindToBlock: 0,
+	}
 	if rew != nil && rew.Sign() > 0 {
-		err.RewindTo = rew.Uint64() - 1
+		err.RewindToBlock = rew.Uint64() - 1
+	}
+	return err
+}
+
+func newTimestampCompatError(what string, storedtime, newtime *big.Int) *ConfigCompatError {
+	var rew *big.Int
+	switch {
+	case storedtime == nil:
+		rew = newtime
+	case newtime == nil || storedtime.Cmp(newtime) < 0:
+		rew = storedtime
+	default:
+		rew = newtime
+	}
+	err := &ConfigCompatError{
+		What:         what,
+		StoredTime:   storedtime,
+		NewTime:      newtime,
+		RewindToTime: 0,
+	}
+	if rew != nil && rew.Sign() > 0 {
+		err.RewindToTime = rew.Uint64() - 1
 	}
 	return err
 }
 
 func (err *ConfigCompatError) Error() string {
-	return fmt.Sprintf("mismatching %s in database (have %d, want %d, rewindto %d)", err.What, err.StoredConfig, err.NewConfig, err.RewindTo)
+	if err.StoredBlock != nil {
+		return fmt.Sprintf("mismatching %s in database (have block %d, want block %d, rewindto block %d)", err.What, err.StoredBlock, err.NewBlock, err.RewindToBlock)
+	}
+	return fmt.Sprintf("mismatching %s in database (have timestamp %d, want timestamp %d, rewindto timestamp %d)", err.What, err.StoredTime, err.NewTime, err.RewindToTime)
 }
 
 // Rules wraps ChainConfig and is merely syntactic sugar or can be used for functions
@@ -960,10 +1065,12 @@ type Rules struct {
 	IsLuban                                                 bool
 	IsPlato                                                 bool
 	IsHertz                                                 bool
+	IsShanghai                                              bool
+	IsCancun                                                bool
 }
 
 // Rules ensures c's ChainID is not nil.
-func (c *ChainConfig) Rules(num *big.Int, isMerge bool) Rules {
+func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp *big.Int) Rules {
 	chainID := c.ChainID
 	if chainID == nil {
 		chainID = new(big.Int)
@@ -987,5 +1094,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool) Rules {
 		IsLuban:          c.IsLuban(num),
 		IsPlato:          c.IsPlato(num),
 		IsHertz:          c.IsHertz(num),
+		IsShanghai:       c.IsShanghai(timestamp),
+		IsCancun:         c.IsCancun(num),
 	}
 }

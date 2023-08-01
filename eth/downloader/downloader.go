@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (
@@ -208,6 +209,10 @@ type BlockChain interface {
 
 	// Snapshots returns the blockchain snapshot tree to paused it during sync.
 	Snapshots() *snapshot.Tree
+
+	// TrieDB retrieves the low level trie database used for interacting
+	// with trie nodes.
+	TrieDB() *trie.Database
 }
 
 type DownloadOption func(downloader *Downloader) *Downloader
@@ -271,7 +276,7 @@ func New(checkpoint uint64, stateDb ethdb.Database, mux *event.TypeMux, chain Bl
 		dropPeer:       dropPeer,
 		headerProcCh:   make(chan *headerTask, 1),
 		quitCh:         make(chan struct{}),
-		SnapSyncer:     snap.NewSyncer(stateDb),
+		SnapSyncer:     snap.NewSyncer(stateDb, chain.TrieDB().Scheme()),
 		stateSyncStart: make(chan *stateSync),
 	}
 	for _, option := range options {
@@ -1182,7 +1187,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, head uint64) e
 				}
 			}
 		}
-		// If no headers have bene delivered, or all of them have been delayed,
+		// If no headers have been delivered, or all of them have been delayed,
 		// sleep a bit and retry. Take care with headers already consumed during
 		// skeleton filling
 		if len(headers) == 0 && !progressed {

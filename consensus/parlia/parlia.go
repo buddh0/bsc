@@ -918,8 +918,19 @@ func (p *Parlia) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 	if len(header.Extra) < extraVanity-nextForkHashSize {
 		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, extraVanity-nextForkHashSize-len(header.Extra))...)
 	}
+
+	// Ensure the timestamp has the correct delay
+	parent := chain.GetHeader(header.ParentHash, number-1)
+	if parent == nil {
+		return consensus.ErrUnknownAncestor
+	}
+	header.Time = p.blockTimeForRamanujanFork(snap, header, parent)
+	if header.Time < uint64(time.Now().Unix()) {
+		header.Time = uint64(time.Now().Unix())
+	}
+
 	header.Extra = header.Extra[:extraVanity-nextForkHashSize]
-	nextForkHash := forkid.NextForkHash(p.chainConfig, p.genesisHash, number)
+	nextForkHash := forkid.NewID(p.chainConfig, p.genesisHash, number, header.Time).Hash
 	header.Extra = append(header.Extra, nextForkHash[:]...)
 
 	if err := p.prepareValidators(header); err != nil {
@@ -932,15 +943,6 @@ func (p *Parlia) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 	// Mix digest is reserved for now, set to empty
 	header.MixDigest = common.Hash{}
 
-	// Ensure the timestamp has the correct delay
-	parent := chain.GetHeader(header.ParentHash, number-1)
-	if parent == nil {
-		return consensus.ErrUnknownAncestor
-	}
-	header.Time = p.blockTimeForRamanujanFork(snap, header, parent)
-	if header.Time < uint64(time.Now().Unix()) {
-		header.Time = uint64(time.Now().Unix())
-	}
 	return nil
 }
 
@@ -1062,7 +1064,7 @@ func (p *Parlia) Finalize(chain consensus.ChainHeaderReader, header *types.Heade
 	if err != nil {
 		return err
 	}
-	nextForkHash := forkid.NextForkHash(p.chainConfig, p.genesisHash, number)
+	nextForkHash := forkid.NewID(p.chainConfig, p.genesisHash, number, header.Time).Hash
 	if !snap.isMajorityFork(hex.EncodeToString(nextForkHash[:])) {
 		log.Debug("there is a possible fork, and your client is not the majority. Please check...", "nextForkHash", hex.EncodeToString(nextForkHash[:]))
 	}
@@ -1692,7 +1694,7 @@ func (p *Parlia) applyTransaction(
 		// move to next
 		*receivedTxs = (*receivedTxs)[1:]
 	}
-	state.Prepare(expectedTx.Hash(), len(*txs))
+	state.SetTxContext(expectedTx.Hash(), len(*txs))
 	gasUsed, err := applyMessage(msg, state, header, p.chainConfig, chainContext)
 	if err != nil {
 		return err
@@ -1710,7 +1712,7 @@ func (p *Parlia) applyTransaction(
 	receipt.GasUsed = gasUsed
 
 	// Set the receipt logs and create a bloom for filtering
-	receipt.Logs = state.GetLogs(expectedTx.Hash(), header.Hash())
+	receipt.Logs = state.GetLogs(expectedTx.Hash(), header.Number.Uint64(), header.Hash())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 	receipt.BlockHash = header.Hash()
 	receipt.BlockNumber = header.Number

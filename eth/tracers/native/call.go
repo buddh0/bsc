@@ -32,7 +32,7 @@ import (
 //go:generate go run github.com/fjl/gencodec -type callFrame -field-override callFrameMarshaling -out gen_callframe_json.go
 
 func init() {
-	register("callTracer", newCallTracer)
+	tracers.DefaultDirectory.Register("callTracer", newCallTracer, false)
 }
 
 type callLog struct {
@@ -179,10 +179,6 @@ func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 		log := callLog{Address: scope.Contract.Address(), Topics: topics, Data: hexutil.Bytes(data)}
 		t.callstack[len(t.callstack)-1].Logs = append(t.callstack[len(t.callstack)-1].Logs, log)
 	}
-}
-
-// CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (t *callTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).

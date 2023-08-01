@@ -38,7 +38,6 @@ require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/graph-gophers/graphql-go v1.3.0
 	github.com/hashicorp/go-bexpr v0.1.10
-	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
 	github.com/holiman/big v0.0.0-20221017200358-a027dc42d04e
 	github.com/holiman/bloomfilter/v2 v2.0.3
 	github.com/holiman/uint256 v1.2.1
@@ -62,7 +61,6 @@ require (
 	github.com/prometheus/tsdb v0.10.0
 	github.com/prysmaticlabs/gohashtree v0.0.3-alpha // indirect
 	github.com/prysmaticlabs/prysm/v4 v4.0.2
-	github.com/rjeczalik/notify v0.9.1
 	github.com/rs/cors v1.8.2
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/status-im/keycard-go v0.2.0
@@ -85,7 +83,10 @@ require (
 )
 
 require (
+	github.com/deckarep/golang-set/v2 v2.1.0
+	github.com/fsnotify/fsnotify v1.6.0
 	github.com/gballet/go-verkle v0.0.0-20220902153445-097bd83b7732
+	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
 	github.com/supranational/blst v0.3.8-0.20220526154634-513d2456b344
 	github.com/urfave/cli/v2 v2.23.7
 	golang.org/x/mobile v0.0.0-20190719004257-d2bd2a29d028
@@ -124,7 +125,6 @@ require (
 	github.com/ferranbt/fastssz v0.0.0-20210905181407-59cf6761a7d5 // indirect
 	github.com/flynn/noise v1.0.0 // indirect
 	github.com/francoispqt/gojay v1.2.13 // indirect
-	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/garslo/gogen v0.0.0-20170306192744-1d203ffc1f61 // indirect
 	github.com/go-kit/kit v0.12.0 // indirect
 	github.com/go-kit/log v0.2.1 // indirect

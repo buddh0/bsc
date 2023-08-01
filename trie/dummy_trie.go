@@ -45,7 +45,7 @@ func (t *EmptyTrie) TryGet(key []byte) ([]byte, error) {
 	return nil, nil
 }
 
-func (t *EmptyTrie) TryGetAccount(key []byte) (*types.StateAccount, error) {
+func (t *EmptyTrie) TryGetAccount(address common.Address) (*types.StateAccount, error) {
 	return nil, nil
 }
 
@@ -70,7 +70,7 @@ func (t *EmptyTrie) TryDelete(key []byte) error {
 	return nil
 }
 
-func (t *EmptyTrie) TryDeleteAccount(key []byte) error {
+func (t *EmptyTrie) TryDeleteAccount(address common.Address) error {
 	return nil
 }
 
@@ -104,6 +104,6 @@ func (t *EmptyTrie) NodeIterator(start []byte) NodeIterator {
 }
 
 // TryUpdateAccount abstract an account write in the trie.
-func (t *EmptyTrie) TryUpdateAccount(key []byte, account *types.StateAccount) error {
+func (t *EmptyTrie) TryUpdateAccount(address common.Address, account *types.StateAccount) error {
 	return nil
 }

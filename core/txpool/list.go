@@ -52,6 +52,7 @@ func (h *nonceHeap) Pop() interface{} {
 	if n := len(old); n > 0 {
 		x := old[n-1]
 		*h = old[0 : n-1]
+		old[n-1] = 0
 		return x
 	}
 	return nil

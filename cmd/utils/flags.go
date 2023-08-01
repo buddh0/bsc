@@ -18,7 +18,6 @@
 package utils
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"errors"
@@ -43,12 +42,10 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -77,8 +74,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // These are all the command line flags we support.
@@ -283,11 +280,6 @@ var (
 		Value:    2048,
 		Category: flags.EthCategory,
 	}
-	OverrideTerminalTotalDifficulty = &flags.BigFlag{
-		Name:     "override.terminaltotaldifficulty",
-		Usage:    "Manually specify TerminalTotalDifficulty, overriding the bundled setting",
-		Category: flags.EthCategory,
-	}
 	TriesInMemoryFlag = &cli.Uint64Flag{
 		Name:  "triesInMemory",
 		Usage: "The layer of tries trees that keep in memory",
@@ -307,9 +299,9 @@ var (
 						with other peers."`,
 		Value: &defaultVerifyMode,
 	}
-	OverrideTerminalTotalDifficultyPassed = &cli.BoolFlag{
-		Name:     "override.terminaltotaldifficultypassed",
-		Usage:    "Manually specify TerminalTotalDifficultyPassed, overriding the bundled setting",
+	OverrideShanghai = &flags.BigFlag{
+		Name:     "override.shanghai",
+		Usage:    "Manually specify the Shanghai fork timestamp, overriding the bundled setting",
 		Category: flags.EthCategory,
 	}
 	// Light server and client settings
@@ -722,11 +714,6 @@ var (
 	}
 
 	// MISC settings
-	IgnoreLegacyReceiptsFlag = &cli.BoolFlag{
-		Name:     "ignore-legacy-receipts",
-		Usage:    "Geth will start up even if there are legacy receipts in freezer",
-		Category: flags.MiscCategory,
-	}
 	SyncTargetFlag = &cli.PathFlag{
 		Name:      "synctarget",
 		Usage:     `File for containing the hex-encoded block-rlp as sync target(dev feature)`,
@@ -987,13 +974,13 @@ var (
 	// other profiling behavior or information.
 	MetricsHTTPFlag = &cli.StringFlag{
 		Name:     "metrics.addr",
-		Usage:    "Enable stand-alone metrics HTTP server listening interface",
-		Value:    metrics.DefaultConfig.HTTP,
+		Usage:    `Enable stand-alone metrics HTTP server listening interface.`,
 		Category: flags.MetricsCategory,
 	}
 	MetricsPortFlag = &cli.IntFlag{
-		Name:     "metrics.port",
-		Usage:    "Metrics HTTP server listening port",
+		Name: "metrics.port",
+		Usage: `Metrics HTTP server listening port.
+Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.`,
 		Value:    metrics.DefaultConfig.Port,
 		Category: flags.MetricsCategory,
 	}
@@ -2067,25 +2054,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.EthDiscoveryURLs = SplitAndTrim(urls)
 		}
 	}
-	if ctx.IsSet(SyncTargetFlag.Name) {
-		path := ctx.Path(SyncTargetFlag.Name)
-		if path == "" {
-			Fatalf("Failed to resolve file path")
-		}
-		blob, err := os.ReadFile(path)
-		if err != nil {
-			Fatalf("Failed to read block file: %v", err)
-		}
-		rlpBlob, err := hexutil.Decode(string(bytes.TrimRight(blob, "\r\n")))
-		if err != nil {
-			Fatalf("Failed to decode block blob: %v", err)
-		}
-		var block types.Block
-		if err := rlp.DecodeBytes(rlpBlob, &block); err != nil {
-			Fatalf("Failed to decode block: %v", err)
-		}
-		cfg.SyncTarget = &block
-	}
 	// Override any default configs for hard coded networks.
 	switch {
 	case ctx.Bool(MainnetFlag.Name):
@@ -2205,7 +2173,6 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 		}
 	}
 	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
-
 	return backend.APIBackend, backend
 }
 
@@ -2319,6 +2286,8 @@ func SetupMetrics(ctx *cli.Context, options ...SetupMetricsOption) {
 			address := fmt.Sprintf("%s:%d", ctx.String(MetricsHTTPFlag.Name), ctx.Int(MetricsPortFlag.Name))
 			log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
 			exp.Setup(address)
+		} else if ctx.IsSet(MetricsPortFlag.Name) {
+			log.Warn(fmt.Sprintf("--%s specified without --%s, metrics server will not start.", MetricsPortFlag.Name, MetricsHTTPFlag.Name))
 		}
 
 		for _, opt := range options {
@@ -2426,7 +2395,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		gspec   = MakeGenesis(ctx)
 		chainDb = MakeChainDatabase(ctx, stack, false, false)
 	)
-	config, genesisHash, err := core.SetupGenesisBlock(chainDb, gspec)
+	config, genesisHash, err := core.SetupGenesisBlock(chainDb, trie.NewDatabase(chainDb), gspec)
 	if err != nil {
 		Fatalf("%v", err)
 	}

@@ -391,7 +391,7 @@ func (ec *Client) SubscribeNewVotes(ctx context.Context, ch chan<- *types.VoteEn
 
 // State Access
 
-// NetworkID returns the network ID (also known as the chain ID) for this chain.
+// NetworkID returns the network ID for this client.
 func (ec *Client) NetworkID(ctx context.Context) (*big.Int, error) {
 	version := new(big.Int)
 	var ver string

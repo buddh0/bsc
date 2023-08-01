@@ -88,7 +88,6 @@ type stateObject struct {
 
 	pendingStorage Storage // Storage entries that need to be flushed to disk, at the end of an entire block
 	dirtyStorage   Storage // Storage entries that have been modified in the current transaction execution
-	fakeStorage    Storage // Fake storage which constructed by caller for debugging purpose.
 
 	// Cache flags.
 	// When an object is marked suicided it will be delete from the trie
@@ -162,7 +161,10 @@ func (s *stateObject) touch() {
 	}
 }
 
-func (s *stateObject) getTrie(db Database) Trie {
+// getTrie returns the associated storage trie. The trie will be opened
+// if it's not loaded previously. An error will be returned if trie can't
+// be loaded.
+func (s *stateObject) getTrie(db Database) (Trie, error) {
 	if s.trie == nil {
 		// Try fetching from prefetcher first
 		// We don't prefetch empty tries
@@ -173,23 +175,18 @@ func (s *stateObject) getTrie(db Database) Trie {
 			s.trie = s.db.prefetcher.trie(s.addrHash, s.data.Root)
 		}
 		if s.trie == nil {
-			var err error
-			s.trie, err = db.OpenStorageTrie(s.db.originalRoot, s.addrHash, s.data.Root)
+			tr, err := db.OpenStorageTrie(s.db.originalRoot, s.addrHash, s.data.Root)
 			if err != nil {
-				s.trie, _ = db.OpenStorageTrie(s.db.originalRoot, s.addrHash, common.Hash{})
-				s.setError(fmt.Errorf("can't create storage trie: %v", err))
+				return nil, err
 			}
+			s.trie = tr
 		}
 	}
-	return s.trie
+	return s.trie, nil
 }
 
 // GetState retrieves a value from the account storage trie.
 func (s *stateObject) GetState(db Database, key common.Hash) common.Hash {
-	// If the fake storage is set, only lookup the state here(in the debugging mode)
-	if s.fakeStorage != nil {
-		return s.fakeStorage[key]
-	}
 	// If we have a dirty value for this state entry, return it
 	value, dirty := s.dirtyStorage[key]
 	if dirty {
@@ -225,10 +222,6 @@ func (s *stateObject) setOriginStorage(key common.Hash, value common.Hash) {
 
 // GetCommittedState retrieves a value from the committed account storage trie.
 func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Hash {
-	// If the fake storage is set, only lookup the state here(in the debugging mode)
-	if s.fakeStorage != nil {
-		return s.fakeStorage[key]
-	}
 	// If we have a pending write or clean cached, return that
 	if value, pending := s.pendingStorage[key]; pending {
 		return value
@@ -237,21 +230,21 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 	if value, cached := s.getOriginStorage(key); cached {
 		return value
 	}
+	// If the object was destructed in *this* block (and potentially resurrected),
+	// the storage has been cleared out, and we should *not* consult the previous
+	// database about any storage values. The only possible alternatives are:
+	//   1) resurrect happened, and new slot values were set -- those should
+	//      have been handles via pendingStorage above.
+	//   2) we don't have new values, and can deliver empty response back
+	if _, destructed := s.db.stateObjectsDestruct[s.address]; destructed {
+		return common.Hash{}
+	}
 	// If no live objects are available, attempt to use snapshots
 	var (
 		enc []byte
 		err error
 	)
 	if s.db.snap != nil {
-		// If the object was destructed in *this* block (and potentially resurrected),
-		// the storage has been cleared out, and we should *not* consult the previous
-		// snapshot about any storage values. The only possible alternatives are:
-		//   1) resurrect happened, and new slot values were set -- those should
-		//      have been handles via pendingStorage above.
-		//   2) we don't have new values, and can deliver empty response back
-		if _, destructed := s.db.snapDestructs[s.address]; destructed {
-			return common.Hash{}
-		}
 		start := time.Now()
 		enc, err = s.db.snap.Storage(s.addrHash, crypto.Keccak256Hash(key.Bytes()))
 		if metrics.EnabledExpensive {
@@ -261,7 +254,12 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 	// If the snapshot is unavailable or reading from it fails, load from the database.
 	if s.db.snap == nil || err != nil {
 		start := time.Now()
-		enc, err = s.getTrie(db).TryGet(key.Bytes())
+		tr, err := s.getTrie(db)
+		if err != nil {
+			s.setError(err)
+			return common.Hash{}
+		}
+		enc, err = tr.TryGet(key.Bytes())
 		if metrics.EnabledExpensive {
 			s.db.StorageReads += time.Since(start)
 		}
@@ -284,11 +282,6 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 
 // SetState updates a value in account storage.
 func (s *stateObject) SetState(db Database, key, value common.Hash) {
-	// If the fake storage is set, put the temporary state update here.
-	if s.fakeStorage != nil {
-		s.fakeStorage[key] = value
-		return
-	}
 	// If the new value is the same as old, don't set
 	prev := s.GetState(db, key)
 	if prev == value {
@@ -301,24 +294,6 @@ func (s *stateObject) SetState(db Database, key, value common.Hash) {
 		prevalue: prev,
 	})
 	s.setState(key, value)
-}
-
-// SetStorage replaces the entire state storage with the given one.
-//
-// After this function is called, all original state will be ignored and state
-// lookup only happens in the fake state storage.
-//
-// Note this function should only be used for debugging purpose.
-func (s *stateObject) SetStorage(storage map[common.Hash]common.Hash) {
-	// Allocate fake storage if it's nil.
-	if s.fakeStorage == nil {
-		s.fakeStorage = make(Storage)
-	}
-	for key, value := range storage {
-		s.fakeStorage[key] = value
-	}
-	// Don't bother journal since this function should only be used for
-	// debugging and the `fake` storage won't be committed to database.
 }
 
 func (s *stateObject) setState(key, value common.Hash) {
@@ -344,12 +319,13 @@ func (s *stateObject) finalise(prefetch bool) {
 }
 
 // updateTrie writes cached storage modifications into the object's storage trie.
-// It will return nil if the trie has not been loaded and no changes have been made
-func (s *stateObject) updateTrie(db Database) Trie {
+// It will return nil if the trie has not been loaded and no changes have been
+// made. An error will be returned if the trie can't be loaded/updated correctly.
+func (s *stateObject) updateTrie(db Database) (Trie, error) {
 	// Make sure all dirty slots are finalized into the pending storage area
 	s.finalise(false) // Don't prefetch anymore, pull directly if need be
 	if len(s.pendingStorage) == 0 {
-		return s.trie
+		return s.trie, nil
 	}
 	// Track the amount of time wasted on updating the storage trie
 	if metrics.EnabledExpensive {
@@ -359,9 +335,12 @@ func (s *stateObject) updateTrie(db Database) Trie {
 			s.db.MetricsMux.Unlock()
 		}(time.Now())
 	}
+	tr, err := s.getTrie(db)
+	if err != nil {
+		s.setError(err)
+		return nil, err
+	}
 	// Insert all the pending updates into the trie
-	tr := s.getTrie(db)
-
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
 	dirtyStorage := make(map[common.Hash][]byte)
 	for key, value := range s.pendingStorage {
@@ -417,10 +396,11 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	if len(s.pendingStorage) > 0 {
 		s.pendingStorage = make(Storage)
 	}
-	return tr
+	return tr, nil
 }
 
-// UpdateRoot sets the trie root to the current root hash of
+// UpdateRoot sets the trie root to the current root hash of. An error
+// will be returned if trie root hash is not computed correctly.
 func (s *stateObject) updateRoot(db Database) {
 	// If node runs in no trie mode, set root to empty.
 	defer func() {
@@ -429,8 +409,13 @@ func (s *stateObject) updateRoot(db Database) {
 		}
 	}()
 
+	tr, err := s.updateTrie(db)
+	if err != nil {
+		s.setError(fmt.Errorf("updateRoot (%x) error: %w", s.address, err))
+		return
+	}
 	// If nothing changed, don't bother with hashing anything
-	if s.updateTrie(db) == nil {
+	if tr == nil {
 		return
 	}
 	// Track the amount of time wasted on hashing the storage trie
@@ -441,27 +426,28 @@ func (s *stateObject) updateRoot(db Database) {
 			s.db.MetricsMux.Unlock()
 		}(time.Now())
 	}
-	s.data.Root = s.trie.Hash()
+	s.data.Root = tr.Hash()
 }
 
 // commitTrie submits the storage changes into the storage trie and re-computes
 // the root. Besides, all trie changes will be collected in a nodeset and returned.
 func (s *stateObject) commitTrie(db Database) (*trie.NodeSet, error) {
-	// If nothing changed, don't bother with hashing anything
-	if s.updateTrie(db) == nil {
-		if s.trie != nil && s.data.Root != emptyRoot {
-			db.CacheStorage(s.addrHash, s.data.Root, s.trie)
-		}
-		return nil, nil
+	tr, err := s.updateTrie(db)
+	if err != nil {
+		return nil, err
 	}
 	if s.dbErr != nil {
 		return nil, s.dbErr
+	}
+	// If nothing changed, don't bother with committing anything
+	if tr == nil {
+		return nil, nil
 	}
 	// Track the amount of time wasted on committing the storage trie
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.db.StorageCommits += time.Since(start) }(time.Now())
 	}
-	root, nodes, err := s.trie.Commit(false)
+	root, nodes, err := tr.Commit(false)
 	if err == nil {
 		s.data.Root = root
 	}

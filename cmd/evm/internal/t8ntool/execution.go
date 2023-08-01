@@ -173,7 +173,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		}
 		vmConfig.Tracer = tracer
 		vmConfig.Debug = (tracer != nil)
-		statedb.Prepare(tx.Hash(), txIndex)
+		statedb.SetTxContext(tx.Hash(), txIndex)
 		txContext := core.NewEVMTxContext(msg)
 		snapshot := statedb.Snapshot()
 		evm := vm.NewEVM(vmContext, txContext, statedb, chainConfig, vmConfig)
@@ -218,7 +218,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			}
 
 			// Set the receipt logs and create the bloom filter.
-			receipt.Logs = statedb.GetLogs(tx.Hash(), blockHash)
+			receipt.Logs = statedb.GetLogs(tx.Hash(), vmContext.BlockNumber.Uint64(), blockHash)
 			receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 			// These three are non-consensus fields:
 			//receipt.BlockHash
@@ -230,8 +230,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		txIndex++
 	}
 	statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber))
-	// Add mining reward?
-	if miningReward > 0 {
+	// Add mining reward? (-1 means rewards are disabled)
+	if miningReward >= 0 {
 		// Add mining reward. The mining reward may be `0`, which only makes a difference in the cases
 		// where
 		// - the coinbase suicided, or

@@ -273,6 +273,12 @@ Please see the [Developers' Guide](https://geth.ethereum.org/docs/developers)
 for more details on configuring your environment, managing project dependencies, and
 testing procedures.
 
+### Contributing to geth.ethereum.org
+
+For contributions to the [go-ethereum website](https://geth.ethereum.org), please checkout and raise pull requests against the `website` branch.
+For more detailed instructions please see the `website` branch [README](https://github.com/ethereum/go-ethereum/tree/website#readme) or the 
+[contributing](https://geth.ethereum.org/docs/developers/geth-developer/contributing) page of the website.
+
 ## License
 
 The bsc library (i.e. all code outside of the `cmd` directory) is licensed under the
