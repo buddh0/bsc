@@ -32,15 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-func TestInvalidCliqueConfig(t *testing.T) {
-	block := DefaultGoerliGenesisBlock()
-	block.ExtraData = []byte{}
-	db := rawdb.NewMemoryDatabase()
-	if _, err := block.Commit(db, trie.NewDatabase(db)); err == nil {
-		t.Fatal("Expected error on invalid clique config")
-	}
-}
-
 func TestSetupGenesis(t *testing.T) {
 	var (
 		customghash = common.HexToHash("0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd50")

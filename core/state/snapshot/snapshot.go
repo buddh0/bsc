@@ -358,8 +358,8 @@ func (t *Tree) Snapshots(root common.Hash, limits int, nodisk bool) []Snapshot {
 	return ret
 }
 
-func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs map[common.Address]struct{}, accounts map[common.Address][]byte, storage map[common.Address]map[string][]byte, verified chan struct{}) error {
-	hashDestructs, hashAccounts, hashStorage := transformSnapData(destructs, accounts, storage)
+func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, hashDestructs map[common.Hash]struct{}, accounts map[common.Address][]byte, storage map[common.Address]map[string][]byte, verified chan struct{}) error {
+	hashAccounts, hashStorage := transformSnapData(accounts, storage)
 	return t.update(blockRoot, parentRoot, hashDestructs, hashAccounts, hashStorage, verified)
 }
 
@@ -890,16 +890,12 @@ func (t *Tree) DiskRoot() common.Hash {
 }
 
 // TODO we can further improve it when the set is very large
-func transformSnapData(destructs map[common.Address]struct{}, accounts map[common.Address][]byte,
-	storage map[common.Address]map[string][]byte) (map[common.Hash]struct{}, map[common.Hash][]byte,
+func transformSnapData(accounts map[common.Address][]byte,
+	storage map[common.Address]map[string][]byte) (map[common.Hash][]byte,
 	map[common.Hash]map[common.Hash][]byte) {
 	hasher := crypto.NewKeccakState()
-	hashDestructs := make(map[common.Hash]struct{}, len(destructs))
 	hashAccounts := make(map[common.Hash][]byte, len(accounts))
 	hashStorages := make(map[common.Hash]map[common.Hash][]byte, len(storage))
-	for addr := range destructs {
-		hashDestructs[crypto.Keccak256Hash(addr[:])] = struct{}{}
-	}
 	for addr, account := range accounts {
 		hashAccounts[crypto.Keccak256Hash(addr[:])] = account
 	}
@@ -910,5 +906,5 @@ func transformSnapData(destructs map[common.Address]struct{}, accounts map[commo
 		}
 		hashStorages[crypto.Keccak256Hash(addr[:])] = hashStorage
 	}
-	return hashDestructs, hashAccounts, hashStorages
+	return hashAccounts, hashStorages
 }

@@ -16,7 +16,6 @@ require (
 	github.com/cometbft/cometbft v0.37.0
 	github.com/consensys/gnark-crypto v0.4.1-0.20210426202927-39ac3d4b3f1f
 	github.com/davecgh/go-spew v1.1.1
-	github.com/deckarep/golang-set v1.8.0
 	github.com/deepmap/oapi-codegen v1.8.2 // indirect
 	github.com/docker/docker v20.10.19+incompatible
 	github.com/dop251/goja v0.0.0-20230122112309-96b1610dd4f7
