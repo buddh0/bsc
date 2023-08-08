@@ -152,12 +152,6 @@ func TestGenesisHashes(t *testing.T) {
 		want    common.Hash
 	}{
 		{DefaultGenesisBlock(), params.MainnetGenesisHash},
-<<<<<<< HEAD
-=======
-		{DefaultGoerliGenesisBlock(), params.GoerliGenesisHash},
-		{DefaultRinkebyGenesisBlock(), params.RinkebyGenesisHash},
-		{DefaultSepoliaGenesisBlock(), params.SepoliaGenesisHash},
->>>>>>> 0807
 	} {
 		// Test via MustCommit
 		if have := c.genesis.MustCommit(rawdb.NewMemoryDatabase()).Hash(); have != c.want {

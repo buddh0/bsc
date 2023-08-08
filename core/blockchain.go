@@ -233,8 +233,6 @@ type BlockChain struct {
 	highestVerifiedHeader atomic.Value
 	currentBlock          atomic.Pointer[types.Header] // Current head of the chain
 	currentSnapBlock      atomic.Pointer[types.Header] // Current head of snap-sync
-	currentFinalBlock     atomic.Pointer[types.Header] // Latest (consensus) finalized block
-	currentSafeBlock      atomic.Pointer[types.Header] // Latest (consensus) safe block
 
 	bodyCache     *lru.Cache[common.Hash, *types.Body]
 	bodyRLPCache  *lru.Cache[common.Hash, rlp.RawValue]
@@ -374,8 +372,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	bc.highestVerifiedHeader.Store(nil)
 	bc.currentBlock.Store(nil)
 	bc.currentSnapBlock.Store(nil)
-	bc.currentFinalBlock.Store(nil)
-	bc.currentSafeBlock.Store(nil)
 
 	// If Geth is initialized with an external ancient store, re-initialize the
 	// missing chain indexes and chain flags. This procedure can survive crash

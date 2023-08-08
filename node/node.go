@@ -786,7 +786,18 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient,
 	if n.config.DataDir == "" {
 		db = rawdb.NewMemoryDatabase()
 	} else {
-		db, err = rawdb.NewLevelDBDatabaseWithFreezer(n.ResolvePath(name), cache, handles, n.ResolveAncient(name, ancient), namespace, readonly, disableFreeze, isLastOffset, pruneAncientData, skipCheckFreezerType)
+		db, err = rawdb.Open(rawdb.OpenOptions{
+			Type:              n.config.DBEngine,
+			Directory:         n.ResolvePath(name),
+			AncientsDirectory: n.ResolveAncient(name, ancient),
+			Namespace:         namespace,
+			Cache:             cache,
+			Handles:           handles,
+			ReadOnly:          readonly,
+			DisableFreeze:     disableFreeze,
+			IsLastOffset:      isLastOffset,
+			PruneAncientData:  pruneAncientData,
+		})
 	}
 
 	if err == nil {
