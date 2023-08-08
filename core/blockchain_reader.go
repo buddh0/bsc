@@ -39,8 +39,14 @@ func (bc *BlockChain) CurrentHeader() *types.Header {
 
 // CurrentBlock retrieves the current head block of the canonical chain. The
 // block is retrieved from the blockchain's internal cache.
-func (bc *BlockChain) CurrentBlock() *types.Block {
-	return bc.currentBlock.Load().(*types.Block)
+func (bc *BlockChain) CurrentBlock() *types.Header {
+	return bc.currentBlock.Load()
+}
+
+// CurrentSnapBlock retrieves the current snap-sync head block of the canonical
+// chain. The block is retrieved from the blockchain's internal cache.
+func (bc *BlockChain) CurrentSnapBlock() *types.Header {
+	return bc.currentSnapBlock.Load()
 }
 
 // CurrentFinalBlock retrieves the current finalized block of the canonical
@@ -71,12 +77,6 @@ func (bc *BlockChain) CurrentSafeBlock() *types.Header {
 		}
 	}
 	return nil
-}
-
-// CurrentFastBlock retrieves the current fast-sync head block of the canonical
-// chain. The block is retrieved from the blockchain's internal cache.
-func (bc *BlockChain) CurrentFastBlock() *types.Block {
-	return bc.currentFastBlock.Load().(*types.Block)
 }
 
 // HasHeader checks if a block header is present in the database or not, caching
@@ -341,7 +341,7 @@ func (bc *BlockChain) ContractCodeWithPrefix(hash common.Hash) ([]byte, error) {
 
 // State returns a new mutable state based on the current HEAD block.
 func (bc *BlockChain) State() (*state.StateDB, error) {
-	return bc.StateAt(bc.CurrentBlock().Root())
+	return bc.StateAt(bc.CurrentBlock().Root)
 }
 
 // StateAt returns a new mutable state based on a particular point in time.
@@ -377,7 +377,7 @@ func (bc *BlockChain) StateCache() state.Database {
 
 // GasLimit returns the gas limit of the current HEAD block.
 func (bc *BlockChain) GasLimit() uint64 {
-	return bc.CurrentBlock().GasLimit()
+	return bc.CurrentBlock().GasLimit
 }
 
 // Genesis retrieves the chain's genesis block.

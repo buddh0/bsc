@@ -56,11 +56,11 @@ func TestState(t *testing.T) {
 	// Uses 1GB RAM per tested fork
 	st.skipLoad(`^stStaticCall/static_Call1MB`)
 
-	// Not yet supported TODO
-	st.skipLoad(`^stEIP3540/`)
-	st.skipLoad(`^stEIP3860/`)
-
 	// Broken tests:
+	//
+	// The stEOF tests are generated with EOF as part of Shanghai, which
+	// is erroneous. Therefore, these tests are skipped.
+	st.skipLoad(`^EIPTests/stEOF/`)
 	// Expected failures:
 
 	// For Istanbul, older tests were moved into LegacyTests
@@ -183,7 +183,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 				b.Error(err)
 				return
 			}
-			var rules = config.Rules(new(big.Int), false, new(big.Int))
+			var rules = config.Rules(new(big.Int), false, 0)
 
 			vmconfig.ExtraEips = eips
 			block := t.genesis(config).ToBlock()

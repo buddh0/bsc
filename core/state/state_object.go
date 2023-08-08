@@ -32,8 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-var emptyCodeHash = crypto.Keccak256(nil)
-
 type Code []byte
 
 func (c Code) String() string {
@@ -102,7 +100,7 @@ type stateObject struct {
 
 // empty returns whether the account is considered empty.
 func (s *stateObject) empty() bool {
-	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, emptyCodeHash)
+	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, types.EmptyCodeHash.Bytes())
 }
 
 // newObject creates a state object.
@@ -111,10 +109,10 @@ func newObject(db *StateDB, address common.Address, data types.StateAccount) *st
 		data.Balance = new(big.Int)
 	}
 	if data.CodeHash == nil {
-		data.CodeHash = emptyCodeHash
+		data.CodeHash = types.EmptyCodeHash.Bytes()
 	}
 	if data.Root == (common.Hash{}) {
-		data.Root = emptyRoot
+		data.Root = types.EmptyRootHash
 	}
 	var storageMap *sync.Map
 	// Check whether the storage exist in pool, new originStorage if not exist
@@ -168,8 +166,7 @@ func (s *stateObject) getTrie(db Database) (Trie, error) {
 	if s.trie == nil {
 		// Try fetching from prefetcher first
 		// We don't prefetch empty tries
-		prefetcher := s.db.prefetcher
-		if s.data.Root != emptyRoot && prefetcher != nil {
+		if s.data.Root != types.EmptyRootHash && s.db.prefetcher != nil {
 			// When the miner is creating the pending state, there is no
 			// prefetcher
 			s.trie = s.db.prefetcher.trie(s.addrHash, s.data.Root)
@@ -310,7 +307,7 @@ func (s *stateObject) finalise(prefetch bool) {
 			slotsToPrefetch = append(slotsToPrefetch, common.CopyBytes(key[:])) // Copy needed for closure
 		}
 	}
-	if s.db.prefetcher != nil && prefetch && len(slotsToPrefetch) > 0 && s.data.Root != emptyRoot {
+	if s.db.prefetcher != nil && prefetch && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
 		s.db.prefetcher.prefetch(s.addrHash, s.data.Root, slotsToPrefetch)
 	}
 	if len(s.dirtyStorage) > 0 {
@@ -447,11 +444,9 @@ func (s *stateObject) commitTrie(db Database) (*trie.NodeSet, error) {
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.db.StorageCommits += time.Since(start) }(time.Now())
 	}
-	root, nodes, err := tr.Commit(false)
-	if err == nil {
-		s.data.Root = root
-	}
-	if s.data.Root != emptyRoot {
+	root, nodes := tr.Commit(false)
+	s.data.Root = root
+	if s.data.Root != types.EmptyRootHash {
 		db.CacheStorage(s.addrHash, s.data.Root, s.trie)
 	}
 	return nodes, err
@@ -521,7 +516,7 @@ func (s *stateObject) Code(db Database) []byte {
 	if s.code != nil {
 		return s.code
 	}
-	if bytes.Equal(s.CodeHash(), emptyCodeHash) {
+	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
 		return nil
 	}
 	code, err := db.ContractCode(s.addrHash, common.BytesToHash(s.CodeHash()))
@@ -539,7 +534,7 @@ func (s *stateObject) CodeSize(db Database) int {
 	if s.code != nil {
 		return len(s.code)
 	}
-	if bytes.Equal(s.CodeHash(), emptyCodeHash) {
+	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
 		return 0
 	}
 	size, err := db.ContractCodeSize(s.addrHash, common.BytesToHash(s.CodeHash()))

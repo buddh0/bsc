@@ -106,7 +106,7 @@ func (p *LightStateProcessor) Process(block *types.Block, statedb *state.StateDB
 			time.Sleep(time.Millisecond)
 		}
 		if diffLayer != nil {
-			if err := diffLayer.Receipts.DeriveFields(p.bc.chainConfig, block.Hash(), block.NumberU64(), block.Transactions()); err != nil {
+			if err := diffLayer.Receipts.DeriveFields(p.bc.chainConfig, block.Hash(), block.NumberU64(), block.BaseFee(), block.Transactions()); err != nil {
 				log.Error("Failed to derive block receipts fields", "hash", block.Hash(), "number", block.NumberU64(), "err", err)
 				// fallback to full process
 				return p.StateProcessor.Process(block, statedb, cfg)
@@ -220,7 +220,7 @@ func (p *LightStateProcessor) LightProcess(diffLayer *types.DiffLayer, block *ty
 					previousAccount.Root = types.EmptyRootHash
 				}
 				if len(previousAccount.CodeHash) == 0 {
-					previousAccount.CodeHash = types.EmptyCodeHash
+					previousAccount.CodeHash = types.EmptyCodeHash.Bytes()
 				}
 
 				// skip no change account
@@ -240,7 +240,7 @@ func (p *LightStateProcessor) LightProcess(diffLayer *types.DiffLayer, block *ty
 				// update code
 				codeHash := common.BytesToHash(latestAccount.CodeHash)
 				if !bytes.Equal(latestAccount.CodeHash, previousAccount.CodeHash) &&
-					!bytes.Equal(latestAccount.CodeHash, types.EmptyCodeHash) {
+					!bytes.Equal(latestAccount.CodeHash, types.EmptyCodeHash.Bytes()) {
 					if code, exist := fullDiffCode[codeHash]; exist {
 						if crypto.Keccak256Hash(code) != codeHash {
 							errChan <- fmt.Errorf("code and code hash mismatch, account %s", diffAccount.String())
@@ -439,8 +439,14 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	bloomProcessors.Close()
 
+	// Fail if Shanghai not enabled and len(withdrawals) is non-zero.
+	withdrawals := block.Withdrawals()
+	if len(withdrawals) > 0 && !p.config.IsShanghai(block.Time()) {
+		return nil, nil, nil, 0, fmt.Errorf("withdrawals before shanghai")
+	}
+
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	err := p.engine.Finalize(p.bc, header, statedb, &commonTxs, block.Uncles(), &receipts, &systemTxs, usedGas)
+	err := p.engine.Finalize(p.bc, header, statedb, commonTxs, block.Uncles(), withdrawals, receipts, systemTxs, usedGas)
 	if err != nil {
 		return statedb, receipts, allLogs, *usedGas, err
 	}

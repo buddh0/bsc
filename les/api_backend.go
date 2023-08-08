@@ -53,8 +53,8 @@ func (b *LesApiBackend) ChainConfig() *params.ChainConfig {
 	return b.eth.chainConfig
 }
 
-func (b *LesApiBackend) CurrentBlock() *types.Block {
-	return types.NewBlockWithHeader(b.eth.BlockChain().CurrentHeader())
+func (b *LesApiBackend) CurrentBlock() *types.Header {
+	return b.eth.BlockChain().CurrentHeader()
 }
 
 func (b *LesApiBackend) SetHead(number uint64) {
@@ -129,6 +129,10 @@ func (b *LesApiBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 		return block, nil
 	}
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
+}
+
+func (b *LesApiBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
+	return light.GetBody(ctx, b.eth.odr, hash, uint64(number))
 }
 
 func (b *LesApiBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {

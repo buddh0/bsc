@@ -137,6 +137,7 @@ func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
 	}
 
 	var cfg clientConfig
+	cfg.httpClient = client
 	fn := newClientTransportHTTP(endpoint, &cfg)
 	return newClient(context.Background(), fn)
 }
@@ -208,7 +209,7 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, "POST", hc.url, io.NopCloser(bytes.NewReader(body)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, hc.url, io.NopCloser(bytes.NewReader(body)))
 	if err != nil {
 		return nil, err
 	}

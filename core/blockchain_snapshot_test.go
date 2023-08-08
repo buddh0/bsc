@@ -61,7 +61,10 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 	// Create a temporary persistent database
 	datadir := t.TempDir()
 
-	db, err := rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false, false, false, false, true)
+	db, err := rawdb.Open(rawdb.OpenOptions{
+		Directory:         datadir,
+		AncientsDirectory: datadir,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create persistent database: %v", err)
 	}
@@ -99,7 +102,7 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 		startPoint = point
 
 		if basic.commitBlock > 0 && basic.commitBlock == point {
-			chain.stateCache.TrieDB().Commit(blocks[point-1].Root(), true, nil)
+			chain.stateCache.TrieDB().Commit(blocks[point-1].Root(), false)
 		}
 		if basic.snapshotBlock > 0 && basic.snapshotBlock == point {
 			// Flushing the entire snap tree into the disk, the
@@ -133,11 +136,11 @@ func (basic *snapshotTestBasic) verify(t *testing.T, chain *BlockChain, blocks [
 	if head := chain.CurrentHeader(); head.Number.Uint64() != basic.expHeadHeader {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, basic.expHeadHeader)
 	}
-	if head := chain.CurrentFastBlock(); head.NumberU64() != basic.expHeadFastBlock {
-		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(), basic.expHeadFastBlock)
+	if head := chain.CurrentSnapBlock(); head.Number.Uint64() != basic.expHeadFastBlock {
+		t.Errorf("Head fast block mismatch: have %d, want %d", head.Number, basic.expHeadFastBlock)
 	}
-	if head := chain.CurrentBlock(); head.NumberU64() != basic.expHeadBlock {
-		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), basic.expHeadBlock)
+	if head := chain.CurrentBlock(); head.Number.Uint64() != basic.expHeadBlock {
+		t.Errorf("Head block mismatch: have %d, want %d", head.Number, basic.expHeadBlock)
 	}
 
 	// Check the disk layer, ensure they are matched
@@ -250,7 +253,11 @@ func (snaptest *crashSnapshotTest) test(t *testing.T) {
 	chain.stopWithoutSaving()
 
 	// Start a new blockchain back up and see where the repair leads us
-	newdb, err := rawdb.NewLevelDBDatabaseWithFreezer(snaptest.datadir, 0, 0, snaptest.datadir, "", false, false, false, false, true)
+	newdb, err := rawdb.Open(rawdb.OpenOptions{
+		Directory:         snaptest.datadir,
+		AncientsDirectory: snaptest.datadir,
+	})
+
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)
 	}

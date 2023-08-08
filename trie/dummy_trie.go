@@ -78,8 +78,8 @@ func (t *EmptyTrie) GetKey(shaKey []byte) []byte {
 	return nil
 }
 
-func (t *EmptyTrie) Commit(collectLeaf bool) (common.Hash, *NodeSet, error) {
-	return common.Hash{}, nil, nil
+func (t *EmptyTrie) Commit(collectLeaf bool) (common.Hash, *NodeSet) {
+	return common.Hash{}, nil
 }
 
 func (t *EmptyTrie) Hash() common.Hash {

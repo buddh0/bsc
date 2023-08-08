@@ -1756,7 +1756,10 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	// Create a temporary persistent database
 	datadir := t.TempDir()
 
-	db, err := rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false, false, false, false, true)
+	db, err := rawdb.Open(rawdb.OpenOptions{
+		Directory:         datadir,
+		AncientsDirectory: datadir,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create persistent database: %v", err)
 	}
@@ -1804,7 +1807,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
 	if tt.commitBlock > 0 {
-		chain.stateCache.TrieDB().Commit(canonblocks[tt.commitBlock-1].Root(), true, nil)
+		chain.stateCache.TrieDB().Commit(canonblocks[tt.commitBlock-1].Root(), false)
 		if snapshots {
 			if err := chain.snaps.Cap(canonblocks[tt.commitBlock-1].Root(), 0); err != nil {
 				t.Fatalf("Failed to flatten snapshots: %v", err)
@@ -1830,8 +1833,12 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	db.Close()
 	chain.stopWithoutSaving()
 
-	// Start a new blockchain back up and see where the repait leads us
-	db, err = rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false, false, false, false, true)
+	// Start a new blockchain back up and see where the repair leads us
+	db, err = rawdb.Open(rawdb.OpenOptions{
+		Directory:         datadir,
+		AncientsDirectory: datadir,
+	})
+
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)
 	}
@@ -1852,11 +1859,11 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	if head := newChain.CurrentHeader(); head.Number.Uint64() != tt.expHeadHeader {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, tt.expHeadHeader)
 	}
-	if head := newChain.CurrentFastBlock(); head.NumberU64() != tt.expHeadFastBlock {
-		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(), tt.expHeadFastBlock)
+	if head := newChain.CurrentSnapBlock(); head.Number.Uint64() != tt.expHeadFastBlock {
+		t.Errorf("Head fast block mismatch: have %d, want %d", head.Number, tt.expHeadFastBlock)
 	}
-	if head := newChain.CurrentBlock(); head.NumberU64() != tt.expHeadBlock {
-		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), tt.expHeadBlock)
+	if head := newChain.CurrentBlock(); head.Number.Uint64() != tt.expHeadBlock {
+		t.Errorf("Head block mismatch: have %d, want %d", head.Number, tt.expHeadBlock)
 	}
 	if frozen, err := db.(freezer).Ancients(); err != nil {
 		t.Errorf("Failed to retrieve ancient count: %v\n", err)
@@ -1886,7 +1893,11 @@ func TestIssue23496(t *testing.T) {
 	// Create a temporary persistent database
 	datadir := t.TempDir()
 
-	db, err := rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false, false, false, false, true)
+	db, err := rawdb.Open(rawdb.OpenOptions{
+		Directory:         datadir,
+		AncientsDirectory: datadir,
+	})
+
 	if err != nil {
 		t.Fatalf("Failed to create persistent database: %v", err)
 	}
@@ -1921,7 +1932,7 @@ func TestIssue23496(t *testing.T) {
 	if _, err := chain.InsertChain(blocks[:1]); err != nil {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
-	chain.stateCache.TrieDB().Commit(blocks[0].Root(), true, nil)
+	chain.stateCache.TrieDB().Commit(blocks[0].Root(), false)
 
 	// Insert block B2 and commit the snapshot into disk
 	if _, err := chain.InsertChain(blocks[1:2]); err != nil {
@@ -1935,7 +1946,7 @@ func TestIssue23496(t *testing.T) {
 	if _, err := chain.InsertChain(blocks[2:3]); err != nil {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
-	chain.stateCache.TrieDB().Commit(blocks[2].Root(), true, nil)
+	chain.stateCache.TrieDB().Commit(blocks[2].Root(), false)
 
 	// Insert the remaining blocks
 	if _, err := chain.InsertChain(blocks[3:]); err != nil {
@@ -1947,7 +1958,10 @@ func TestIssue23496(t *testing.T) {
 	chain.stopWithoutSaving()
 
 	// Start a new blockchain back up and see where the repair leads us
-	db, err = rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false, false, false, false, true)
+	db, err = rawdb.Open(rawdb.OpenOptions{
+		Directory:         datadir,
+		AncientsDirectory: datadir,
+	})
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)
 	}
@@ -1962,11 +1976,11 @@ func TestIssue23496(t *testing.T) {
 	if head := chain.CurrentHeader(); head.Number.Uint64() != uint64(4) {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, 4)
 	}
-	if head := chain.CurrentFastBlock(); head.NumberU64() != uint64(4) {
-		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(), uint64(4))
+	if head := chain.CurrentSnapBlock(); head.Number.Uint64() != uint64(4) {
+		t.Errorf("Head fast block mismatch: have %d, want %d", head.Number, uint64(4))
 	}
-	if head := chain.CurrentBlock(); head.NumberU64() != uint64(1) {
-		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), uint64(1))
+	if head := chain.CurrentBlock(); head.Number.Uint64() != uint64(1) {
+		t.Errorf("Head block mismatch: have %d, want %d", head.Number, uint64(1))
 	}
 
 	// Reinsert B2-B4
@@ -1976,11 +1990,11 @@ func TestIssue23496(t *testing.T) {
 	if head := chain.CurrentHeader(); head.Number.Uint64() != uint64(4) {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, 4)
 	}
-	if head := chain.CurrentFastBlock(); head.NumberU64() != uint64(4) {
-		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(), uint64(4))
+	if head := chain.CurrentSnapBlock(); head.Number.Uint64() != uint64(4) {
+		t.Errorf("Head fast block mismatch: have %d, want %d", head.Number, uint64(4))
 	}
-	if head := chain.CurrentBlock(); head.NumberU64() != uint64(4) {
-		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), uint64(4))
+	if head := chain.CurrentBlock(); head.Number.Uint64() != uint64(4) {
+		t.Errorf("Head block mismatch: have %d, want %d", head.Number, uint64(4))
 	}
 	if layer := chain.Snapshots().Snapshot(blocks[2].Root()); layer == nil {
 		t.Error("Failed to regenerate the snapshot of known state")

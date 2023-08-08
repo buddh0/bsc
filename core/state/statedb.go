@@ -47,13 +47,6 @@ type revision struct {
 	journalIndex int
 }
 
-var (
-	// emptyRoot is the known root hash of an empty trie.
-	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-
-	emptyAddr = crypto.Keccak256Hash(common.Address{}.Bytes())
-)
-
 type proofList [][]byte
 
 func (n *proofList) Put(key []byte, value []byte) error {
@@ -761,10 +754,10 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 				Root:     common.BytesToHash(acc.Root),
 			}
 			if len(data.CodeHash) == 0 {
-				data.CodeHash = emptyCodeHash
+				data.CodeHash = types.EmptyCodeHash.Bytes()
 			}
 			if data.Root == (common.Hash{}) {
-				data.Root = emptyRoot
+				data.Root = types.EmptyRootHash
 			}
 		}
 	}
@@ -1135,7 +1128,7 @@ func (s *StateDB) CorrectAccountsRoot(blockRoot common.Hash) {
 			if !obj.deleted {
 				if account, exist := accounts[crypto.Keccak256Hash(obj.address[:])]; exist {
 					if len(account.Root) == 0 {
-						obj.data.Root = emptyRoot
+						obj.data.Root = types.EmptyRootHash
 					} else {
 						obj.data.Root = common.BytesToHash(account.Root)
 					}
@@ -1366,11 +1359,7 @@ func (s *StateDB) LightCommit() (common.Hash, *types.DiffLayer, error) {
 				tmpAccount := account
 				tmpDiff := diff
 				tasks <- func() {
-					root, set, err := tmpDiff.Commit(true)
-					if err != nil {
-						taskResults <- tastResult{err, nil}
-						return
-					}
+					root, set := tmpDiff.Commit(true)
 					s.db.CacheStorage(crypto.Keccak256Hash(tmpAccount[:]), root, tmpDiff)
 					taskResults <- tastResult{nil, set}
 				}
@@ -1391,17 +1380,14 @@ func (s *StateDB) LightCommit() (common.Hash, *types.DiffLayer, error) {
 			}
 
 			// commit account trie
-			root, set, err := s.trie.Commit(true)
-			if err != nil {
-				return err
-			}
+			root, set := s.trie.Commit(true)
 			// Merge the dirty nodes of account trie into global set
 			if set != nil {
 				if err := nodes.Merge(set); err != nil {
 					return err
 				}
 			}
-			if root != emptyRoot {
+			if root != types.EmptyRootHash {
 				s.db.CacheAccount(root, s.trie)
 			}
 			return nil
@@ -1445,11 +1431,11 @@ func (s *StateDB) LightCommit() (common.Hash, *types.DiffLayer, error) {
 	s.snap, s.stateObjectsDestruct, s.snapAccounts, s.snapStorage = nil, nil, nil, nil
 	s.diffTries, s.diffCode = nil, nil
 	if root == (common.Hash{}) {
-		root = emptyRoot
+		root = types.EmptyRootHash
 	}
 	origin := s.originalRoot
 	if origin == (common.Hash{}) {
-		origin = emptyRoot
+		origin = types.EmptyRootHash
 	}
 	if root != origin {
 		start := time.Now()
@@ -1583,17 +1569,14 @@ func (s *StateDB) Commit(failPostCommitFunc func(), postCommitFuncs ...func() er
 			close(finishCh)
 
 			if !s.noTrie {
-				root, set, err := s.trie.Commit(true)
-				if err != nil {
-					return err
-				}
+				root, set := s.trie.Commit(true)
 				// Merge the dirty nodes of account trie into global set
 				if set != nil {
 					if err := nodes.Merge(set); err != nil {
 						return err
 					}
 				}
-				if root != emptyRoot {
+				if root != types.EmptyRootHash {
 					s.db.CacheAccount(root, s.trie)
 				}
 			}
@@ -1720,11 +1703,11 @@ func (s *StateDB) Commit(failPostCommitFunc func(), postCommitFuncs ...func() er
 	}
 
 	if root == (common.Hash{}) {
-		root = emptyRoot
+		root = types.EmptyRootHash
 	}
 	origin := s.originalRoot
 	if origin == (common.Hash{}) {
-		origin = emptyRoot
+		origin = types.EmptyRootHash
 	}
 	if root != origin {
 		start := time.Now()

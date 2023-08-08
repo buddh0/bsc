@@ -71,6 +71,19 @@ const (
 	beaconUpdateWarnFrequency = 5 * time.Minute
 )
 
+// All methods provided over the engine endpoint.
+var caps = []string{
+	"engine_forkchoiceUpdatedV1",
+	"engine_forkchoiceUpdatedV2",
+	"engine_exchangeTransitionConfigurationV1",
+	"engine_getPayloadV1",
+	"engine_getPayloadV2",
+	"engine_newPayloadV1",
+	"engine_newPayloadV2",
+	"engine_getPayloadBodiesByHashV1",
+	"engine_getPayloadBodiesByRangeV1",
+}
+
 type ConsensusAPI struct {
 	eth *eth.Ethereum
 

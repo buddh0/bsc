@@ -48,14 +48,6 @@ import (
 )
 
 var (
-	// emptyRoot is the known root hash of an empty trie.
-	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-
-	// emptyCode is the known hash of the empty EVM bytecode.
-	emptyCode = crypto.Keccak256(nil)
-)
-
-var (
 	snapshotCommand = &cli.Command{
 		Name:        "snapshot",
 		Usage:       "A set of commands based on the snapshot",
@@ -271,7 +263,7 @@ func accessDb(ctx *cli.Context, stack *node.Node) (ethdb.Database, error) {
 	// Ensure the root is really present. The weak assumption
 	// is the presence of root can indicate the presence of the
 	// entire trie.
-	if blob := rawdb.ReadTrieNode(chaindb, targetRoot); len(blob) == 0 {
+	if blob := rawdb.ReadLegacyTrieNode(chaindb, targetRoot); len(blob) == 0 {
 		// The special case is for clique based networks(rinkeby, goerli
 		// and some other private networks), it's possible that two
 		// consecutive blocks will have same root. In this case snapshot
@@ -285,7 +277,7 @@ func accessDb(ctx *cli.Context, stack *node.Node) (ethdb.Database, error) {
 		// as the pruning target.
 		var found bool
 		for i := len(layers) - 2; i >= 1; i-- {
-			if blob := rawdb.ReadTrieNode(chaindb, layers[i].Root()); len(blob) != 0 {
+			if blob := rawdb.ReadLegacyTrieNode(chaindb, layers[i].Root()); len(blob) != 0 {
 				targetRoot = layers[i].Root()
 				found = true
 				log.Info("Selecting middle-layer as the pruning target", "root", targetRoot, "depth", i)
@@ -293,7 +285,7 @@ func accessDb(ctx *cli.Context, stack *node.Node) (ethdb.Database, error) {
 			}
 		}
 		if !found {
-			if blob := rawdb.ReadTrieNode(chaindb, snaptree.DiskRoot()); len(blob) != 0 {
+			if blob := rawdb.ReadLegacyTrieNode(chaindb, snaptree.DiskRoot()); len(blob) != 0 {
 				targetRoot = snaptree.DiskRoot()
 				found = true
 				log.Info("Selecting disk-layer as the pruning target", "root", targetRoot)
@@ -413,6 +405,8 @@ func pruneBlock(ctx *cli.Context) error {
 	return nil
 }
 
+// Deprecation: this command should be deprecated once the hash-based
+// scheme is deprecated.
 func pruneState(ctx *cli.Context) error {
 	stack, config := makeConfigNode(ctx)
 	defer stack.Close()
@@ -594,7 +588,7 @@ func traverseState(ctx *cli.Context) error {
 			log.Error("Invalid account encountered during traversal", "err", err)
 			return err
 		}
-		if acc.Root != emptyRoot {
+		if acc.Root != types.EmptyRootHash {
 			id := trie.StorageTrieID(root, common.BytesToHash(accIter.Key), acc.Root)
 			storageTrie, err := trie.NewStateTrie(id, triedb)
 			if err != nil {
@@ -610,7 +604,7 @@ func traverseState(ctx *cli.Context) error {
 				return storageIter.Err
 			}
 		}
-		if !bytes.Equal(acc.CodeHash, emptyCode) {
+		if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
 			if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
 				log.Error("Code is missing", "hash", common.BytesToHash(acc.CodeHash))
 				return errors.New("missing code")
@@ -687,7 +681,7 @@ func traverseRawState(ctx *cli.Context) error {
 		// Check the present for non-empty hash node(embedded node doesn't
 		// have their own hash).
 		if node != (common.Hash{}) {
-			blob := rawdb.ReadTrieNode(chaindb, node)
+			blob := rawdb.ReadLegacyTrieNode(chaindb, node)
 			if len(blob) == 0 {
 				log.Error("Missing trie node(account)", "hash", node)
 				return errors.New("missing account")
@@ -709,7 +703,7 @@ func traverseRawState(ctx *cli.Context) error {
 				log.Error("Invalid account encountered during traversal", "err", err)
 				return errors.New("invalid account")
 			}
-			if acc.Root != emptyRoot {
+			if acc.Root != types.EmptyRootHash {
 				id := trie.StorageTrieID(root, common.BytesToHash(accIter.LeafKey()), acc.Root)
 				storageTrie, err := trie.NewStateTrie(id, triedb)
 				if err != nil {
@@ -721,10 +715,10 @@ func traverseRawState(ctx *cli.Context) error {
 					nodes += 1
 					node := storageIter.Hash()
 
-					// Check the present for non-empty hash node(embedded node doesn't
+					// Check the presence for non-empty hash node(embedded node doesn't
 					// have their own hash).
 					if node != (common.Hash{}) {
-						blob := rawdb.ReadTrieNode(chaindb, node)
+						blob := rawdb.ReadLegacyTrieNode(chaindb, node)
 						if len(blob) == 0 {
 							log.Error("Missing trie node(storage)", "hash", node)
 							return errors.New("missing storage")
@@ -747,7 +741,7 @@ func traverseRawState(ctx *cli.Context) error {
 					return storageIter.Error()
 				}
 			}
-			if !bytes.Equal(acc.CodeHash, emptyCode) {
+			if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
 				if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
 					log.Error("Code is missing", "account", common.BytesToHash(accIter.LeafKey()))
 					return errors.New("missing code")
@@ -823,7 +817,7 @@ func dumpState(ctx *cli.Context) error {
 			CodeHash:  account.CodeHash,
 			SecureKey: accIt.Hash().Bytes(),
 		}
-		if !conf.SkipCode && !bytes.Equal(account.CodeHash, emptyCode) {
+		if !conf.SkipCode && !bytes.Equal(account.CodeHash, types.EmptyCodeHash.Bytes()) {
 			da.Code = rawdb.ReadCode(db, common.BytesToHash(account.CodeHash))
 		}
 		if !conf.SkipStorage {

@@ -206,8 +206,8 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		// * the last snap sync is not finished while user specifies a full sync this
 		//   time. But we don't have any recent state for full sync.
 		// In these cases however it's safe to reenable snap sync.
-		fullBlock, fastBlock := h.chain.CurrentBlock(), h.chain.CurrentFastBlock()
-		if fullBlock.NumberU64() == 0 && fastBlock.NumberU64() > 0 {
+		fullBlock, snapBlock := h.chain.CurrentBlock(), h.chain.CurrentSnapBlock()
+		if fullBlock.Number.Uint64() == 0 && snapBlock.Number.Uint64() > 0 {
 			if rawdb.ReadAncientType(h.database) == rawdb.PruneFreezerType {
 				log.Crit("Fast Sync not finish, can't enable pruneancient mode")
 			}
@@ -215,7 +215,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			log.Warn("Switch sync mode from full sync to snap sync")
 		}
 	} else {
-		if h.chain.CurrentBlock().NumberU64() > 0 {
+		if h.chain.CurrentBlock().Number.Uint64() > 0 {
 			// Print warning log if database is not empty to run snap sync.
 			log.Warn("Switch sync mode from snap sync to full sync")
 		} else {
@@ -235,6 +235,28 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	if h.diffSync {
 		downloadOptions = append(downloadOptions, downloader.EnableDiffFetchOp(h.peers))
 	}
+	// If sync succeeds, pass a callback to potentially disable snap sync mode
+	// and enable transaction propagation.
+	success := func(dl *downloader.Downloader) *downloader.Downloader {
+		// If we were running snap sync and it finished, disable doing another
+		// round on next sync cycle
+		if atomic.LoadUint32(&h.snapSync) == 1 {
+			log.Info("Snap sync complete, auto disabling")
+			atomic.StoreUint32(&h.snapSync, 0)
+		}
+		// If we've successfully finished a sync cycle and passed any required
+		// checkpoint, enable accepting transactions from the network
+		head := h.chain.CurrentBlock()
+		if head.Number.Uint64() >= h.checkpointNumber {
+			// Checkpoint passed, sanity check the timestamp to have a fallback mechanism
+			// for non-checkpointed (number = 0) private networks.
+			if head.Time >= uint64(time.Now().AddDate(0, -1, 0).Unix()) {
+				atomic.StoreUint32(&h.acceptTxs, 1)
+			}
+		}
+		return dl
+	}
+	downloadOptions = append(downloadOptions, success)
 	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.eventMux, h.chain, nil, h.removePeer, downloadOptions...)
 
 	// Construct the fetcher (short sync)
@@ -257,7 +279,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return h.chain.Engine().VerifyHeader(h.chain, header, true)
 	}
 	heighter := func() uint64 {
-		return h.chain.CurrentBlock().NumberU64()
+		return h.chain.CurrentBlock().Number.Uint64()
 	}
 	inserter := func(blocks types.Blocks) (int, error) {
 		// All the block fetcher activities should be disabled
@@ -280,7 +302,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		// the propagated block if the head is too old. Unfortunately there is a corner
 		// case when starting new networks, where the genesis might be ancient (0 unix)
 		// which would prevent full nodes from accepting it.
-		if h.chain.CurrentBlock().NumberU64() < h.checkpointNumber {
+		if h.chain.CurrentBlock().Number.Uint64() < h.checkpointNumber {
 			log.Warn("Unsynced yet, discarded propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
 			return 0, nil
 		}
@@ -882,7 +904,7 @@ func (h *handler) BroadcastVote(vote *types.VoteEnvelope) {
 	// Broadcast vote to a batch of peers not knowing about it
 	peers := h.peers.peersWithoutVote(vote.Hash())
 	headBlock := h.chain.CurrentBlock()
-	currentTD := h.chain.GetTd(headBlock.Hash(), headBlock.NumberU64())
+	currentTD := h.chain.GetTd(headBlock.Hash(), headBlock.Number.Uint64())
 	for _, peer := range peers {
 		_, peerTD := peer.Head()
 		deltaTD := new(big.Int).Abs(new(big.Int).Sub(currentTD, peerTD))

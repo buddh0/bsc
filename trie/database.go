@@ -411,7 +411,7 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	memcacheDirtyMissMeter.Mark(1)
 
 	// Content unavailable in memory, attempt to retrieve from disk
-	enc := rawdb.ReadTrieNode(db.diskdb, hash)
+	enc := rawdb.ReadLegacyTrieNode(db.diskdb, hash)
 	if len(enc) != 0 {
 		if db.cleans != nil {
 			db.cleans.Set(hash[:], enc)
@@ -589,7 +589,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 		for size > limit && oldest != (common.Hash{}) {
 			// Fetch the oldest referenced node and push into the batch
 			node := db.dirties[oldest]
-			rawdb.WriteTrieNode(batch, oldest, node.rlp())
+			rawdb.WriteLegacyTrieNode(batch, oldest, node.rlp())
 
 			// If we exceeded the ideal batch size, commit and reset
 			if batch.ValueSize() >= ethdb.IdealBatchSize {
@@ -655,7 +655,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 //
 // Note, this method is a non-synchronized mutator. It is unsafe to call this
 // concurrently with other mutators.
-func (db *Database) Commit(node common.Hash, report bool, callback func(common.Hash)) error {
+func (db *Database) Commit(node common.Hash, report bool) error {
 	// Create a database batch to flush persistent data out. It is important that
 	// outside code doesn't see an inconsistent state (referenced data removed from
 	// memory cache during commit but not yet in persistent storage). This is ensured
@@ -675,7 +675,7 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 	db.lock.RUnlock()
 
 	uncacher := &cleaner{db}
-	if err := db.commit(node, batch, uncacher, callback); err != nil {
+	if err := db.commit(node, batch, uncacher); err != nil {
 		log.Error("Failed to commit trie from trie database", "err", err)
 		return err
 	}
@@ -712,7 +712,7 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 }
 
 // commit is the private locked version of Commit.
-func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner, callback func(common.Hash)) error {
+func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner) error {
 	// If the node does not exist, it's a previously committed node
 	db.lock.RLock()
 	node, ok := db.dirties[hash]
@@ -725,17 +725,14 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	var err error
 	node.forChilds(func(child common.Hash) {
 		if err == nil {
-			err = db.commit(child, batch, uncacher, callback)
+			err = db.commit(child, batch, uncacher)
 		}
 	})
 	if err != nil {
 		return err
 	}
 	// If we've reached an optimal batch size, commit and start over
-	rawdb.WriteTrieNode(batch, hash, node.rlp())
-	if callback != nil {
-		callback(hash)
-	}
+	rawdb.WriteLegacyTrieNode(batch, hash, node.rlp())
 	if batch.ValueSize() >= ethdb.IdealBatchSize {
 		if err := batch.Write(); err != nil {
 			return err
@@ -840,7 +837,7 @@ func (db *Database) Update(nodes *MergedNodeSet) error {
 			if err := rlp.DecodeBytes(n.blob, &account); err != nil {
 				return err
 			}
-			if account.Root != emptyRoot {
+			if account.Root != types.EmptyRootHash {
 				db.reference(account.Root, n.parent)
 			}
 		}
@@ -938,6 +935,6 @@ func (db *Database) CommitPreimages() error {
 }
 
 // Scheme returns the node scheme used in the database.
-func (db *Database) Scheme() NodeScheme {
-	return &hashScheme{}
+func (db *Database) Scheme() string {
+	return rawdb.HashScheme
 }

@@ -573,16 +573,8 @@ func freezerInspect(ctx *cli.Context) error {
 		return err
 	}
 	stack, _ := makeConfigNode(ctx)
-	defer stack.Close()
-
-	db := utils.MakeChainDatabase(ctx, stack, true, false)
-	defer db.Close()
-
-	ancient, err := db.AncientDatadir()
-	if err != nil {
-		log.Info("Failed to retrieve ancient root", "err", err)
-		return err
-	}
+	ancient := stack.ResolveAncient("chaindata", ctx.String(utils.AncientFlag.Name))
+	stack.Close()
 	return rawdb.InspectFreezerTable(ancient, freezer, table, start, end)
 }
 

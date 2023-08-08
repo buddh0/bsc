@@ -55,7 +55,7 @@ func main() {
 	// Pre-generate the ethash mining DAG so we don't race
 	ethash.MakeDataset(1, ethconfig.Defaults.Ethash.DatasetDir)
 
-	// Create an Ethash network based off of the Ropsten config
+	// Create an Ethash network
 	genesis := makeGenesis(faucets)
 
 	// Handle interrupts.

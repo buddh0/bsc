@@ -76,18 +76,10 @@ func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber)
 		number = 0
 	}
 	if number == rpc.FinalizedBlockNumber {
-		header := b.chain.CurrentFinalBlock()
-		if header == nil {
-			return nil, errors.New("finalized block not found")
-		}
-		number = rpc.BlockNumber(header.Number.Uint64())
+		number = rpc.BlockNumber(b.chain.CurrentFinalBlock().Number.Uint64())
 	}
 	if number == rpc.SafeBlockNumber {
-		header := b.chain.CurrentSafeBlock()
-		if header == nil {
-			return nil, errors.New("safe block not found")
-		}
-		number = rpc.BlockNumber(header.Number.Uint64())
+		number = rpc.BlockNumber(b.chain.CurrentSafeBlock().Number.Uint64())
 	}
 	if number == rpc.LatestBlockNumber {
 		number = testHead

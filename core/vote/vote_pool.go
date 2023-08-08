@@ -118,7 +118,7 @@ func (pool *VotePool) PutVote(vote *types.VoteEnvelope) {
 func (pool *VotePool) putIntoVotePool(vote *types.VoteEnvelope) bool {
 	targetNumber := vote.Data.TargetNumber
 	targetHash := vote.Data.TargetHash
-	header := pool.chain.CurrentBlock().Header()
+	header := pool.chain.CurrentBlock()
 	headNumber := header.Number.Uint64()
 
 	// Make sure in the range (currentHeight-lowerLimitOfVoteBlockNumber, currentHeight+upperLimitOfVoteBlockNumber].

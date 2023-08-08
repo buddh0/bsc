@@ -68,7 +68,7 @@ func NewVerifyManager(blockchain *BlockChain, peers verifyPeers, allowInsecure b
 	}
 
 	// rewind to last non verified block
-	number := new(big.Int).Sub(block.Number(), big.NewInt(int64(maxForkHeight)))
+	number := new(big.Int).Sub(block.Number, big.NewInt(int64(maxForkHeight)))
 	if number.Cmp(common.Big0) < 0 {
 		blockchain.SetHead(0)
 	} else {

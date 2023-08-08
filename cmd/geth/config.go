@@ -46,10 +46,10 @@ var (
 	dumpConfigCommand = &cli.Command{
 		Action:      dumpConfig,
 		Name:        "dumpconfig",
-		Usage:       "Show configuration values",
-		ArgsUsage:   "",
+		Usage:       "Export configuration values in a TOML format",
+		ArgsUsage:   "<dumpfile (optional)>",
 		Flags:       flags.Merge(nodeFlags, rpcFlags),
-		Description: `The dumpconfig command shows configuration values.`,
+		Description: `Export configuration values in TOML format (to stdout by default).`,
 	}
 
 	configFileFlag = &cli.StringFlag{
@@ -157,7 +157,8 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	stack, cfg := makeConfigNode(ctx)
 	if ctx.IsSet(utils.OverrideShanghai.Name) {
-		cfg.Eth.OverrideShanghai = flags.GlobalBig(ctx, utils.OverrideShanghai.Name)
+		v := ctx.Uint64(utils.OverrideShanghai.Name)
+		cfg.Eth.OverrideShanghai = &v
 	}
 	backend, _ := utils.RegisterEthService(stack, &cfg.Eth)
 

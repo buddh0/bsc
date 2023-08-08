@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
@@ -52,10 +53,7 @@ func makeTestTrie() (*Database, *StateTrie, map[string][]byte) {
 			trie.Update(key, val)
 		}
 	}
-	root, nodes, err := trie.Commit(false)
-	if err != nil {
-		panic(fmt.Errorf("failed to commit trie %v", err))
-	}
+	root, nodes := trie.Commit(false)
 	if err := triedb.Update(NewWithNodeSet(nodes)); err != nil {
 		panic(fmt.Errorf("failed to commit db %v", err))
 	}
@@ -107,7 +105,7 @@ func TestEmptySync(t *testing.T) {
 	dbA := NewDatabase(rawdb.NewMemoryDatabase())
 	dbB := NewDatabase(rawdb.NewMemoryDatabase())
 	emptyA, _ := New(TrieID(common.Hash{}), dbA)
-	emptyB, _ := New(TrieID(emptyRoot), dbB)
+	emptyB, _ := New(TrieID(types.EmptyRootHash), dbB)
 
 	for i, trie := range []*Trie{emptyA, emptyB} {
 		sync := NewSync(trie.Hash(), memorydb.New(), nil, []*Database{dbA, dbB}[i].Scheme())

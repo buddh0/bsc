@@ -297,9 +297,10 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				for i, tx := range task.block.Transactions() {
 					msg, _ := tx.AsMessage(signer, task.block.BaseFee())
 					txctx := &Context{
-						BlockHash: task.block.Hash(),
-						TxIndex:   i,
-						TxHash:    tx.Hash(),
+						BlockHash:   task.block.Hash(),
+						BlockNumber: task.block.Number(),
+						TxIndex:     i,
+						TxHash:      tx.Hash(),
 					}
 					res, err := api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config)
 					if err != nil {
@@ -645,9 +646,10 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		// Generate the next state snapshot fast without tracing
 		msg, _ := tx.AsMessage(signer, block.BaseFee())
 		txctx := &Context{
-			BlockHash: blockHash,
-			TxIndex:   i,
-			TxHash:    tx.Hash(),
+			BlockHash:   blockHash,
+			BlockNumber: block.Number(),
+			TxIndex:     i,
+			TxHash:      tx.Hash(),
 		}
 		res, err := api.traceTx(ctx, msg, txctx, blockCtx, statedb, config)
 		if err != nil {
@@ -688,9 +690,10 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 			for task := range jobs {
 				msg, _ := txs[task.index].AsMessage(signer, block.BaseFee())
 				txctx := &Context{
-					BlockHash: blockHash,
-					TxIndex:   task.index,
-					TxHash:    txs[task.index].Hash(),
+					BlockHash:   blockHash,
+					BlockNumber: block.Number(),
+					TxIndex:     task.index,
+					TxHash:      txs[task.index].Hash(),
 				}
 				res, err := api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config)
 				if err != nil {
@@ -798,17 +801,9 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	// actual specified block, not any preceding blocks that we have to go through
 	// in order to obtain the state.
 	// Therefore, it's perfectly valid to specify `"futureForkBlock": 0`, to enable `futureFork`
-
 	if config != nil && config.Overrides != nil {
-		// Copy the config, to not screw up the main config
-		// Note: the Clique-part is _not_ deep copied
-		chainConfigCopy := new(params.ChainConfig)
-		*chainConfigCopy = *chainConfig
-		chainConfig = chainConfigCopy
-		if berlin := config.Config.Overrides.BerlinBlock; berlin != nil {
-			chainConfig.BerlinBlock = berlin
-			canon = false
-		}
+		// Note: This copies the config, to not screw up the main config
+		chainConfig, canon = overrideConfig(chainConfig, config.Overrides)
 	}
 	for i, tx := range block.Transactions() {
 		// Prepare the transaction for un-traced execution
@@ -917,9 +912,10 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 	defer release()
 
 	txctx := &Context{
-		BlockHash: blockHash,
-		TxIndex:   int(index),
-		TxHash:    hash,
+		BlockHash:   blockHash,
+		BlockNumber: block.Number(),
+		TxIndex:     int(index),
+		TxHash:      hash,
 	}
 	return api.traceTx(ctx, msg, txctx, vmctx, statedb, config)
 }
@@ -1050,4 +1046,49 @@ func APIs(backend Backend) []rpc.API {
 			Service:   NewAPI(backend),
 		},
 	}
+}
+
+// overrideConfig returns a copy of original with forks enabled by override enabled,
+// along with a boolean that indicates whether the copy is canonical (equivalent to the original).
+// Note: the Clique-part is _not_ deep copied
+func overrideConfig(original *params.ChainConfig, override *params.ChainConfig) (*params.ChainConfig, bool) {
+	copy := new(params.ChainConfig)
+	*copy = *original
+	canon := true
+
+	// Apply forks (after Berlin) to the copy.
+	if block := override.BerlinBlock; block != nil {
+		copy.BerlinBlock = block
+		canon = false
+	}
+	if block := override.LondonBlock; block != nil {
+		copy.LondonBlock = block
+		canon = false
+	}
+	if block := override.ArrowGlacierBlock; block != nil {
+		copy.ArrowGlacierBlock = block
+		canon = false
+	}
+	if block := override.GrayGlacierBlock; block != nil {
+		copy.GrayGlacierBlock = block
+		canon = false
+	}
+	if block := override.MergeNetsplitBlock; block != nil {
+		copy.MergeNetsplitBlock = block
+		canon = false
+	}
+	if timestamp := override.ShanghaiTime; timestamp != nil {
+		copy.ShanghaiTime = timestamp
+		canon = false
+	}
+	if timestamp := override.CancunTime; timestamp != nil {
+		copy.CancunTime = timestamp
+		canon = false
+	}
+	if timestamp := override.PragueTime; timestamp != nil {
+		copy.PragueTime = timestamp
+		canon = false
+	}
+
+	return copy, canon
 }

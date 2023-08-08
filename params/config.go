@@ -47,6 +47,8 @@ var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
 	MainnetGenesisHash: MainnetCheckpointOracle,
 }
 
+func newUint64(val uint64) *uint64 { return &val }
+
 var (
 	MainnetTerminalTotalDifficulty, _ = new(big.Int).SetString("58_750_000_000_000_000_000_000", 0)
 
@@ -155,10 +157,10 @@ var (
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
 	MainnetTrustedCheckpoint = &TrustedCheckpoint{
-		SectionIndex: 471,
-		SectionHead:  common.HexToHash("0xa03d6354f5ca8d33203bb646ac26a964f240ee54728dcb7483faff0204ec4c9b"),
-		CHTRoot:      common.HexToHash("0x29efeeea3540b7f499b4214d5262bd1fcd87253de10a878f92e6497d848b186f"),
-		BloomRoot:    common.HexToHash("0x2ff6a93ff5e78e823bfc80c6ec856bfe9b20c4ffd0af3cef644a916eabcd3c84"),
+		SectionIndex: 506,
+		SectionHead:  common.HexToHash("0x3d1a139a6fc7764211236ef7c64d9e8c1fe55b358d7414e25277bac1144486cd"),
+		CHTRoot:      common.HexToHash("0xef7fc3321a239a54238593bdf68d82933d903cb533b0d03228a8d958cd35ea77"),
+		BloomRoot:    common.HexToHash("0x51d7bfe7c6397b1caa8b1cb046de4aeaf7e7fbd3fb6c726b60bf750de78809e8"),
 	}
 
 	// MainnetCheckpointOracle contains a set of configs for the main network oracle.
@@ -317,23 +319,130 @@ var (
 
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Ethash consensus.
-	//
-	// This configuration is intentionally not using keyed fields to force anyone
-	// adding flags to the config to also have to set these fields.
-
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, nil, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), false, new(EthashConfig), nil, nil}
+	AllEthashProtocolChanges = &ChainConfig{
+		ChainID:                       big.NewInt(1337),
+		HomesteadBlock:                big.NewInt(0),
+		DAOForkBlock:                  nil,
+		DAOForkSupport:                false,
+		EIP150Block:                   big.NewInt(0),
+		EIP150Hash:                    common.Hash{},
+		EIP155Block:                   big.NewInt(0),
+		EIP158Block:                   big.NewInt(0),
+		ByzantiumBlock:                big.NewInt(0),
+		ConstantinopleBlock:           big.NewInt(0),
+		PetersburgBlock:               big.NewInt(0),
+		IstanbulBlock:                 big.NewInt(0),
+		MuirGlacierBlock:              big.NewInt(0),
+		BerlinBlock:                   big.NewInt(0),
+		LondonBlock:                   big.NewInt(0),
+		ArrowGlacierBlock:             big.NewInt(0),
+		GrayGlacierBlock:              big.NewInt(0),
+		MergeNetsplitBlock:            nil,
+		ShanghaiTime:                  nil,
+		CancunTime:                    nil,
+		PragueTime:                    nil,
+		TerminalTotalDifficulty:       nil,
+		TerminalTotalDifficultyPassed: false,
+		Ethash:                        new(EthashConfig),
+		Clique:                        nil,
+	}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
-	//
-	// This configuration is intentionally not using keyed fields to force anyone
-	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, big.NewInt(0), nil, nil, nil, nil, nil, nil, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, big.NewInt(0), big.NewInt(0), big.NewInt(0), false, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil}
+	AllCliqueProtocolChanges = &ChainConfig{
+		ChainID:                       big.NewInt(1337),
+		HomesteadBlock:                big.NewInt(0),
+		DAOForkBlock:                  nil,
+		DAOForkSupport:                false,
+		EIP150Block:                   big.NewInt(0),
+		EIP150Hash:                    common.Hash{},
+		EIP155Block:                   big.NewInt(0),
+		EIP158Block:                   big.NewInt(0),
+		ByzantiumBlock:                big.NewInt(0),
+		ConstantinopleBlock:           big.NewInt(0),
+		PetersburgBlock:               big.NewInt(0),
+		IstanbulBlock:                 big.NewInt(0),
+		MuirGlacierBlock:              big.NewInt(0),
+		BerlinBlock:                   big.NewInt(0),
+		LondonBlock:                   big.NewInt(0),
+		ArrowGlacierBlock:             nil,
+		GrayGlacierBlock:              nil,
+		MergeNetsplitBlock:            nil,
+		ShanghaiTime:                  nil,
+		CancunTime:                    nil,
+		PragueTime:                    nil,
+		TerminalTotalDifficulty:       nil,
+		TerminalTotalDifficultyPassed: false,
+		Ethash:                        nil,
+		Clique:                        &CliqueConfig{Period: 0, Epoch: 30000},
+	}
 
-	TestChainConfig    = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, nil, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, big.NewInt(0), big.NewInt(0), big.NewInt(0), false, new(EthashConfig), nil, nil}
-	NonActivatedConfig = &ChainConfig{big.NewInt(1), nil, nil, false, nil, common.Hash{}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, false, new(EthashConfig), nil, nil}
-	TestRules          = TestChainConfig.Rules(new(big.Int), false, new(big.Int))
+	// TestChainConfig contains every protocol change (EIPs) introduced
+	// and accepted by the Ethereum core developers for testing proposes.
+	TestChainConfig = &ChainConfig{
+		ChainID:                       big.NewInt(1),
+		HomesteadBlock:                big.NewInt(0),
+		DAOForkBlock:                  nil,
+		DAOForkSupport:                false,
+		EIP150Block:                   big.NewInt(0),
+		EIP150Hash:                    common.Hash{},
+		EIP155Block:                   big.NewInt(0),
+		EIP158Block:                   big.NewInt(0),
+		ByzantiumBlock:                big.NewInt(0),
+		ConstantinopleBlock:           big.NewInt(0),
+		PetersburgBlock:               big.NewInt(0),
+		IstanbulBlock:                 big.NewInt(0),
+		MuirGlacierBlock:              big.NewInt(0),
+		BerlinBlock:                   big.NewInt(0),
+		LondonBlock:                   big.NewInt(0),
+		ArrowGlacierBlock:             big.NewInt(0),
+		GrayGlacierBlock:              big.NewInt(0),
+		MergeNetsplitBlock:            nil,
+		ShanghaiTime:                  nil,
+		CancunTime:                    nil,
+		PragueTime:                    nil,
+		TerminalTotalDifficulty:       nil,
+		TerminalTotalDifficultyPassed: false,
+		Ethash:                        new(EthashConfig),
+		Clique:                        nil,
+	}
+
+	// NonActivatedConfig defines the chain configuration without activating
+	// any protocol change (EIPs).
+	NonActivatedConfig = &ChainConfig{
+		ChainID:                       big.NewInt(1),
+		HomesteadBlock:                nil,
+		DAOForkBlock:                  nil,
+		DAOForkSupport:                false,
+		EIP150Block:                   nil,
+		EIP150Hash:                    common.Hash{},
+		EIP155Block:                   nil,
+		EIP158Block:                   nil,
+		ByzantiumBlock:                nil,
+		ConstantinopleBlock:           nil,
+		PetersburgBlock:               nil,
+		IstanbulBlock:                 nil,
+		MuirGlacierBlock:              nil,
+		BerlinBlock:                   nil,
+		LondonBlock:                   nil,
+		ArrowGlacierBlock:             nil,
+		GrayGlacierBlock:              nil,
+		MergeNetsplitBlock:            nil,
+		ShanghaiTime:                  nil,
+		CancunTime:                    nil,
+		PragueTime:                    nil,
+		TerminalTotalDifficulty:       nil,
+		TerminalTotalDifficultyPassed: false,
+		Ethash:                        new(EthashConfig),
+		Clique:                        nil,
+	}
+	TestRules = TestChainConfig.Rules(new(big.Int), false, 0)
 )
+
+// NetworkNames are user friendly names to use in the chain spec banner.
+var NetworkNames = map[string]string{
+	MainnetChainConfig.ChainID.String(): "mainnet",
+}
 
 // TrustedCheckpoint represents a set of post-processed trie roots (CHT and
 // BloomTrie) associated with the appropriate section index and head hash. It is
@@ -415,11 +524,12 @@ type ChainConfig struct {
 	ArrowGlacierBlock   *big.Int `json:"arrowGlacierBlock,omitempty"`   // Eip-4345 (bomb delay) switch block (nil = no fork, 0 = already activated)
 	GrayGlacierBlock    *big.Int `json:"grayGlacierBlock,omitempty"`    // Eip-5133 (bomb delay) switch block (nil = no fork, 0 = already activated)
 	MergeNetsplitBlock  *big.Int `json:"mergeNetsplitBlock,omitempty"`  // Virtual fork after The Merge to use as a network splitter
-	CancunBlock         *big.Int `json:"cancunBlock,omitempty"`         // Cancun switch block (nil = no fork, 0 = already on cancun)
 
 	// Fork scheduling was switched from blocks to timestamps here
 
-	ShanghaiTime *big.Int `json:"shanghaiTime,omitempty"` // Shanghai switch time (nil = no fork, 0 = already on shanghai)
+	ShanghaiTime *uint64 `json:"shanghaiTime,omitempty"` // Shanghai switch time (nil = no fork, 0 = already on shanghai)
+	CancunTime   *uint64 `json:"cancunTime,omitempty"`   // Cancun switch time (nil = no fork, 0 = already on cancun)
+	PragueTime   *uint64 `json:"pragueTime,omitempty"`   // Prague switch time (nil = no fork, 0 = already on prague)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -726,14 +836,19 @@ func (c *ChainConfig) IsOnPlanck(num *big.Int) bool {
 	return configBlockEqual(c.PlanckBlock, num)
 }
 
-// IsCancun returns whether num is either equal to the Cancun fork block or greater.
-func (c *ChainConfig) IsCancun(num *big.Int) bool {
-	return isBlockForked(c.CancunBlock, num)
+// IsShanghai returns whether time is either equal to the Shanghai fork time or greater.
+func (c *ChainConfig) IsShanghai(time uint64) bool {
+	return isTimestampForked(c.ShanghaiTime, time)
 }
 
-// IsShanghai returns whether time is either equal to the Shanghai fork time or greater.
-func (c *ChainConfig) IsShanghai(time *big.Int) bool {
-	return isTimestampForked(c.ShanghaiTime, time)
+// IsCancun returns whether num is either equal to the Cancun fork time or greater.
+func (c *ChainConfig) IsCancun(time uint64) bool {
+	return isTimestampForked(c.CancunTime, time)
+}
+
+// IsPrague returns whether num is either equal to the Prague fork time or greater.
+func (c *ChainConfig) IsPrague(time uint64) bool {
+	return isTimestampForked(c.PragueTime, time)
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
@@ -741,7 +856,7 @@ func (c *ChainConfig) IsShanghai(time *big.Int) bool {
 func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64, time uint64) *ConfigCompatError {
 	var (
 		bhead = new(big.Int).SetUint64(height)
-		btime = new(big.Int).SetUint64(time)
+		btime = time
 	)
 	// Iterate checkCompatible to find the lowest conflict.
 	var lasterr *ConfigCompatError
@@ -753,7 +868,7 @@ func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64, time u
 		lasterr = err
 
 		if err.RewindToTime > 0 {
-			btime.SetUint64(err.RewindToTime)
+			btime = err.RewindToTime
 		} else {
 			bhead.SetUint64(err.RewindToBlock)
 		}
@@ -767,7 +882,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	type fork struct {
 		name      string
 		block     *big.Int // forks up to - and including the merge - were defined with block numbers
-		timestamp *big.Int // forks after the merge are scheduled using timestamps
+		timestamp *uint64  // forks after the merge are scheduled using timestamps
 		optional  bool     // if true, the fork may be nil and next fork is still allowed
 	}
 	var lastFork fork
@@ -779,8 +894,9 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "lubanBlock", block: c.LubanBlock},
 		{name: "platoBlock", block: c.PlatoBlock},
 		{name: "hertzBlock", block: c.HertzBlock},
-		{name: "cancunBlock", block: c.CancunBlock, optional: true},
 		{name: "shanghaiTime", timestamp: c.ShanghaiTime},
+		{name: "cancunTime", timestamp: c.CancunTime, optional: true},
+		{name: "pragueTime", timestamp: c.PragueTime, optional: true},
 	} {
 		if lastFork.name != "" {
 			switch {
@@ -799,7 +915,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 				if lastFork.block != nil && lastFork.block.Cmp(cur.block) > 0 {
 					return fmt.Errorf("unsupported fork ordering: %v enabled at block %v, but %v enabled at block %v",
 						lastFork.name, lastFork.block, cur.name, cur.block)
-				} else if lastFork.timestamp != nil && lastFork.timestamp.Cmp(cur.timestamp) > 0 {
+				} else if lastFork.timestamp != nil && *lastFork.timestamp > *cur.timestamp {
 					return fmt.Errorf("unsupported fork ordering: %v enabled at timestamp %v, but %v enabled at timestamp %v",
 						lastFork.name, lastFork.timestamp, cur.name, cur.timestamp)
 				}
@@ -819,7 +935,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	return nil
 }
 
-func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, headTimestamp *big.Int) *ConfigCompatError {
+func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, headTimestamp uint64) *ConfigCompatError {
 	if isForkBlockIncompatible(c.HomesteadBlock, newcfg.HomesteadBlock, headNumber) {
 		return newBlockCompatError("Homestead fork block", c.HomesteadBlock, newcfg.HomesteadBlock)
 	}
@@ -908,11 +1024,14 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	if isForkBlockIncompatible(c.HertzBlock, newcfg.HertzBlock, headNumber) {
 		return newBlockCompatError("hertz fork block", c.HertzBlock, newcfg.HertzBlock)
 	}
-	if isForkBlockIncompatible(c.CancunBlock, newcfg.CancunBlock, headNumber) {
-		return newBlockCompatError("Cancun fork block", c.CancunBlock, newcfg.CancunBlock)
-	}
 	if isForkTimestampIncompatible(c.ShanghaiTime, newcfg.ShanghaiTime, headTimestamp) {
 		return newTimestampCompatError("Shanghai fork timestamp", c.ShanghaiTime, newcfg.ShanghaiTime)
+	}
+	if isForkTimestampIncompatible(c.CancunTime, newcfg.CancunTime, headTimestamp) {
+		return newTimestampCompatError("Cancun fork timestamp", c.CancunTime, newcfg.CancunTime)
+	}
+	if isForkTimestampIncompatible(c.PragueTime, newcfg.PragueTime, headTimestamp) {
+		return newTimestampCompatError("Prague fork timestamp", c.PragueTime, newcfg.PragueTime)
 	}
 	return nil
 }
@@ -955,28 +1074,28 @@ func configBlockEqual(x, y *big.Int) bool {
 
 // isForkTimestampIncompatible returns true if a fork scheduled at timestamp s1
 // cannot be rescheduled to timestamp s2 because head is already past the fork.
-func isForkTimestampIncompatible(s1, s2, head *big.Int) bool {
+func isForkTimestampIncompatible(s1, s2 *uint64, head uint64) bool {
 	return (isTimestampForked(s1, head) || isTimestampForked(s2, head)) && !configTimestampEqual(s1, s2)
 }
 
 // isTimestampForked returns whether a fork scheduled at timestamp s is active
 // at the given head timestamp. Whilst this method is the same as isBlockForked,
 // they are explicitly separate for clearer reading.
-func isTimestampForked(s, head *big.Int) bool {
-	if s == nil || head == nil {
+func isTimestampForked(s *uint64, head uint64) bool {
+	if s == nil {
 		return false
 	}
-	return s.Cmp(head) <= 0
+	return *s <= head
 }
 
-func configTimestampEqual(x, y *big.Int) bool {
+func configTimestampEqual(x, y *uint64) bool {
 	if x == nil {
 		return y == nil
 	}
 	if y == nil {
 		return x == nil
 	}
-	return x.Cmp(y) == 0
+	return *x == *y
 }
 
 // ConfigCompatError is raised if the locally-stored blockchain is initialised with a
@@ -988,7 +1107,7 @@ type ConfigCompatError struct {
 	StoredBlock, NewBlock *big.Int
 
 	// timestamps of the stored and new configurations if time based forking
-	StoredTime, NewTime *big.Int
+	StoredTime, NewTime *uint64
 
 	// the block number to which the local chain must be rewound to correct the error
 	RewindToBlock uint64
@@ -1019,12 +1138,12 @@ func newBlockCompatError(what string, storedblock, newblock *big.Int) *ConfigCom
 	return err
 }
 
-func newTimestampCompatError(what string, storedtime, newtime *big.Int) *ConfigCompatError {
-	var rew *big.Int
+func newTimestampCompatError(what string, storedtime, newtime *uint64) *ConfigCompatError {
+	var rew *uint64
 	switch {
 	case storedtime == nil:
 		rew = newtime
-	case newtime == nil || storedtime.Cmp(newtime) < 0:
+	case newtime == nil || *storedtime < *newtime:
 		rew = storedtime
 	default:
 		rew = newtime
@@ -1035,8 +1154,8 @@ func newTimestampCompatError(what string, storedtime, newtime *big.Int) *ConfigC
 		NewTime:      newtime,
 		RewindToTime: 0,
 	}
-	if rew != nil && rew.Sign() > 0 {
-		err.RewindToTime = rew.Uint64() - 1
+	if rew != nil {
+		err.RewindToTime = *rew - 1
 	}
 	return err
 }
@@ -1067,10 +1186,11 @@ type Rules struct {
 	IsHertz                                                 bool
 	IsShanghai                                              bool
 	IsCancun                                                bool
+	isPrague                                                bool
 }
 
 // Rules ensures c's ChainID is not nil.
-func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp *big.Int) Rules {
+func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules {
 	chainID := c.ChainID
 	if chainID == nil {
 		chainID = new(big.Int)
@@ -1095,6 +1215,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp *big.Int) Rule
 		IsPlato:          c.IsPlato(num),
 		IsHertz:          c.IsHertz(num),
 		IsShanghai:       c.IsShanghai(timestamp),
-		IsCancun:         c.IsCancun(num),
+		IsCancun:         c.IsCancun(timestamp),
+		isPrague:         c.IsPrague(timestamp),
 	}
 }

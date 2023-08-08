@@ -269,7 +269,7 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 	}
 	var header *types.Header
 	if blockNr == rpc.LatestBlockNumber {
-		header = api.eth.blockchain.CurrentHeader()
+		header = api.eth.blockchain.CurrentBlock()
 	} else if blockNr == rpc.FinalizedBlockNumber {
 		header = api.eth.blockchain.CurrentFinalBlock()
 	} else if blockNr == rpc.SafeBlockNumber {
@@ -353,7 +353,7 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 		} else {
 			var header *types.Header
 			if number == rpc.LatestBlockNumber {
-				header = api.eth.blockchain.CurrentHeader()
+				header = api.eth.blockchain.CurrentBlock()
 			} else if number == rpc.FinalizedBlockNumber {
 				header = api.eth.blockchain.CurrentFinalBlock()
 			} else if number == rpc.SafeBlockNumber {
@@ -560,7 +560,7 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 			if block == nil {
 				return 0, fmt.Errorf("current block missing")
 			}
-			return block.NumberU64(), nil
+			return block.Number.Uint64(), nil
 		}
 		return uint64(num.Int64()), nil
 	}
