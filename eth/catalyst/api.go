@@ -18,6 +18,8 @@
 package catalyst
 
 import (
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -56,15 +58,10 @@ const (
 	// attached before starting to issue warnings.
 	beaconUpdateStartupTimeout = 30 * time.Second
 
-	// beaconUpdateExchangeTimeout is the max time allowed for a beacon client to
-	// do a transition config exchange before it's considered offline and the user
-	// is warned.
-	beaconUpdateExchangeTimeout = 2 * time.Minute
-
 	// beaconUpdateConsensusTimeout is the max time allowed for a beacon client
 	// to send a consensus update before it's considered offline and the user is
 	// warned.
-	beaconUpdateConsensusTimeout = 30 * time.Second
+	beaconUpdateConsensusTimeout = 2 * time.Minute
 
 	// beaconUpdateWarnFrequency is the frequency at which to warn the user that
 	// the beacon client is offline.

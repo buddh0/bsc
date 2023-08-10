@@ -264,10 +264,18 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	// Verify existence / non-existence of withdrawalsHash.
 	shanghai := chain.Config().IsShanghai(header.Time)
 	if shanghai && header.WithdrawalsHash == nil {
-		return fmt.Errorf("missing withdrawalsHash")
+		return errors.New("missing withdrawalsHash")
 	}
 	if !shanghai && header.WithdrawalsHash != nil {
 		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", header.WithdrawalsHash)
+	}
+	// Verify the existence / non-existence of excessDataGas
+	cancun := chain.Config().IsCancun(header.Time)
+	if cancun && header.ExcessDataGas == nil {
+		return errors.New("missing excessDataGas")
+	}
+	if !cancun && header.ExcessDataGas != nil {
+		return fmt.Errorf("invalid excessDataGas: have %d, expected nil", header.ExcessDataGas)
 	}
 	return nil
 }
@@ -333,8 +341,7 @@ func (beacon *Beacon) Delay(_ consensus.ChainReader, _ *types.Header, _ *time.Du
 
 // Finalize implements consensus.Engine, setting the final state on the header
 func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, withdrawals []*types.Withdrawal, _ []*types.Receipt, _ []*types.Transaction, _ *uint64) error {
-	// Finalize is different with Prepare, it can be used in both block generation
-	// and verification. So determine the consensus rules by header type.
+	// Finalize is different with Prepare, it can be used in both block verification.
 	if !beacon.IsPoSHeader(header) {
 		beacon.ethone.Finalize(chain, header, state, txs, uncles, nil, nil, nil, nil)
 		return nil
@@ -346,17 +353,14 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 		amount = amount.Mul(amount, big.NewInt(params.GWei))
 		state.AddBalance(w.Address, amount)
 	}
-	// The block reward is no longer handled here. It's done by the
-	// external consensus engine.
-	header.Root = state.IntermediateRoot(true)
+	// No block reward which is issued by consensus layer instead.
 	return nil
 }
 
 // FinalizeAndAssemble implements consensus.Engine, setting the final state and
 // assembling the block.
 func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt, withdrawals []*types.Withdrawal) (*types.Block, []*types.Receipt, error) {
-	// FinalizeAndAssemble is different with Prepare, it can be used in both block
-	// generation and verification. So determine the consensus rules by header type.
+	// FinalizeAndAssemble is different with Prepare, it can be used in both block generation.
 	if !beacon.IsPoSHeader(header) {
 		return beacon.ethone.FinalizeAndAssemble(chain, header, state, txs, uncles, receipts, nil)
 	}
@@ -373,6 +377,10 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	}
 	// Finalize and assemble the block.
 	beacon.Finalize(chain, header, state, txs, uncles, withdrawals, nil, nil, nil)
+
+	// Assign the final state root to header.
+	header.Root = state.IntermediateRoot(true)
+
 	return types.NewBlockWithWithdrawals(header, txs, uncles, receipts, withdrawals, trie.NewStackTrie(nil)), receipts, nil
 }
 

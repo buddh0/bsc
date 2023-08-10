@@ -302,9 +302,8 @@ func (c *Clique) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 	if chain.Config().IsShanghai(header.Time) {
 		return fmt.Errorf("clique does not support shanghai fork")
 	}
-	// If all checks passed, validate any special fields for hard forks
-	if err := misc.VerifyForkHashes(chain.Config(), header, false); err != nil {
-		return err
+	if chain.Config().IsCancun(header.Time) {
+		return fmt.Errorf("clique does not support cancun fork")
 	}
 	// All basic checks passed, verify cascading fields
 	return c.verifyCascadingFields(chain, header, parents)
@@ -570,9 +569,7 @@ func (c *Clique) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 // rewards given.
 func (c *Clique) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, withdrawals []*types.Withdrawal,
 	receipts []*types.Receipt, _ []*types.Transaction, _ *uint64) (err error) {
-	// No block rewards in PoA, so the state remains as is and uncles are dropped
-	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
-	header.UncleHash = types.CalcUncleHash(nil)
+	// No block rewards in PoA, so the state remains as is
 	return
 }
 
@@ -582,9 +579,11 @@ func (c *Clique) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *
 	if len(withdrawals) > 0 {
 		return nil, nil, errors.New("clique does not support withdrawals")
 	}
-
 	// Finalize block
 	c.Finalize(chain, header, state, txs, uncles, nil, nil, nil, nil)
+
+	// Assign the final state root to header.
+	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil)), receipts, nil

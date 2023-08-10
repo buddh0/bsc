@@ -202,7 +202,7 @@ type BlockChain struct {
 	gcproc        time.Duration                    // Accumulates canonical block processing for trie dumping
 	commitLock    sync.Mutex                       // CommitLock is used to protect above field from being modified concurrently
 	lastWrite     uint64                           // Last block when the state was flushed
-	flushInterval int64                            // Time interval (processing time) after which to flush a state
+	flushInterval atomic.Int64                     // Time interval (processing time) after which to flush a state
 	triedb        *trie.Database                   // The database handler for maintaining trie nodes.
 	stateCache    state.Database                   // State database to reuse between imports (contains state cache)
 
@@ -261,10 +261,10 @@ type BlockChain struct {
 	diffNumToBlockHashes  map[uint64]map[common.Hash]struct{}              // map[number]map[blockHash]
 	diffPeersToDiffHashes map[string]map[common.Hash]struct{}              // map[pid]map[diffHash]
 
-	quit          chan struct{}  // blockchain quit channel
-	wg            sync.WaitGroup // chain processing wait group for shutting down
-	running       int32          // 0 if chain is running, 1 when stopped
-	procInterrupt int32          // interrupt signaler for block processing
+	wg            sync.WaitGroup //
+	quit          chan struct{}  // shutdown signal, closed in Stop.
+	stopping      atomic.Bool    // false if chain is running, true when stopped
+	procInterrupt atomic.Bool    // interrupt signaler for block processing
 
 	engine     consensus.Engine
 	prefetcher Prefetcher
@@ -321,13 +321,12 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	log.Info("")
 
 	bc := &BlockChain{
-		chainConfig:   chainConfig,
-		cacheConfig:   cacheConfig,
-		db:            db,
-		triedb:        triedb,
-		flushInterval: int64(cacheConfig.TrieTimeLimit),
-		triegc:        prque.New[int64, common.Hash](nil),
-		quit:          make(chan struct{}),
+		chainConfig: chainConfig,
+		cacheConfig: cacheConfig,
+		db:          db,
+		triedb:      triedb,
+		triegc:      prque.New[int64, common.Hash](nil),
+		quit:        make(chan struct{}),
 		stateCache: state.NewDatabaseWithNodeDB(db, triedb, &trie.Config{
 			NoTries: cacheConfig.NoTries,
 		}),
@@ -355,6 +354,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	}
 
 	bc.prefetcher = NewStatePrefetcher(chainConfig, bc, engine)
+	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
 	bc.forker = NewForkChoice(bc, shouldPreserve)
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.processor = NewStateProcessor(chainConfig, bc, engine)
@@ -1194,14 +1194,14 @@ func (bc *BlockChain) GetDiffAccounts(blockHash common.Hash) ([]common.Address, 
 	return accounts, nil
 }
 
-// stop stops the blockchain service. If any imports are currently in progress
+// stopWithoutSaving stops the blockchain service. If any imports are currently in progress
 // it will abort them using the procInterrupt. This method stops all running
 // goroutines, but does not do all the post-stop work of persisting data.
 // OBS! It is generally recommended to use the Stop method!
 // This method has been exposed to allow tests to stop the blockchain while simulating
 // a crash.
 func (bc *BlockChain) stopWithoutSaving() {
-	if !atomic.CompareAndSwapInt32(&bc.running, 0, 1) {
+	if !bc.stopping.CompareAndSwap(false, true) {
 		return
 	}
 
@@ -1287,12 +1287,12 @@ func (bc *BlockChain) Stop() {
 // errInsertionInterrupted as soon as possible. Insertion is permanently disabled after
 // calling this method.
 func (bc *BlockChain) StopInsert() {
-	atomic.StoreInt32(&bc.procInterrupt, 1)
+	bc.procInterrupt.Store(true)
 }
 
 // insertStopped returns true after StopInsert has been called.
 func (bc *BlockChain) insertStopped() bool {
-	return atomic.LoadInt32(&bc.procInterrupt) == 1
+	return bc.procInterrupt.Load()
 }
 
 func (bc *BlockChain) procFutureBlocks() {
@@ -1678,7 +1678,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				// Find the next state trie we need to commit
 				chosen := current - bc.triesInMemory
 
-				flushInterval := time.Duration(atomic.LoadInt64(&bc.flushInterval))
+				flushInterval := time.Duration(bc.flushInterval.Load())
 
 				// If we exceeded out time allowance, flush an entire trie to disk
 				if bc.gcproc > flushInterval {
@@ -2086,11 +2086,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		}
 
 		//Process block using the parent state as reference point
-		substart := time.Now()
 		if bc.pipeCommit {
 			statedb.EnablePipeCommit()
 		}
 		statedb.SetExpectedStateRoot(block.Root())
+		pstart := time.Now()
 		statedb, receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		close(interruptCh) // state prefetch can be stopped
 		if err != nil {
@@ -2098,18 +2098,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 			statedb.StopPrefetcher()
 			return it.index, err
 		}
-		// Update the metrics touched during block processing
-		accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
-		storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete, we can mark them
-		accountUpdateTimer.Update(statedb.AccountUpdates)             // Account updates are complete, we can mark them
-		storageUpdateTimer.Update(statedb.StorageUpdates)             // Storage updates are complete, we can mark them
-		snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads) // Account reads are complete, we can mark them
-		snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads) // Storage reads are complete, we can mark them
-
-		blockExecutionTimer.Update(time.Since(substart))
+		ptime := time.Since(pstart)
 
 		// Validate the state using the default validator
-		substart = time.Now()
+		vstart := time.Now()
 		if !statedb.IsLightProcessed() {
 			if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
 				log.Error("validate state failed", "error", err)
@@ -2118,19 +2110,33 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 				return it.index, err
 			}
 		}
+		vtime := time.Since(vstart)
+		proctime := time.Since(start) // processing + validation
+
 		bc.cacheReceipts(block.Hash(), receipts)
 		bc.cacheBlock(block.Hash(), block)
-		proctime := time.Since(start)
 
-		// Update the metrics touched during block validation
-		accountHashTimer.Update(statedb.AccountHashes) // Account hashes are complete, we can mark them
-		storageHashTimer.Update(statedb.StorageHashes) // Storage hashes are complete, we can mark them
-
-		blockValidationTimer.Update(time.Since(substart))
+		// Update the metrics touched during block processing and validation
+		accountReadTimer.Update(statedb.AccountReads)                   // Account reads are complete(in processing)
+		storageReadTimer.Update(statedb.StorageReads)                   // Storage reads are complete(in processing)
+		snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads)   // Account reads are complete(in processing)
+		snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads)   // Storage reads are complete(in processing)
+		accountUpdateTimer.Update(statedb.AccountUpdates)               // Account updates are complete(in validation)
+		storageUpdateTimer.Update(statedb.StorageUpdates)               // Storage updates are complete(in validation)
+		accountHashTimer.Update(statedb.AccountHashes)                  // Account hashes are complete(in validation)
+		storageHashTimer.Update(statedb.StorageHashes)                  // Storage hashes are complete(in validation)
+		triehash := statedb.AccountHashes + statedb.StorageHashes       // The time spent on tries hashing
+		trieUpdate := statedb.AccountUpdates + statedb.StorageUpdates   // The time spent on tries update
+		trieRead := statedb.SnapshotAccountReads + statedb.AccountReads // The time spent on account read
+		trieRead += statedb.SnapshotStorageReads + statedb.StorageReads // The time spent on storage read
+		blockExecutionTimer.Update(ptime - trieRead)                    // The time spent on EVM processing
+		blockValidationTimer.Update(vtime - (triehash + trieUpdate))    // The time spent on block validation
 
 		// Write the block to the chain and get the status.
-		substart = time.Now()
-		var status WriteStatus
+		var (
+			wstart = time.Now()
+			status WriteStatus
+		)
 		if !setHead {
 			// Don't set the head, only insert the block
 			err = bc.writeBlockWithState(block, receipts, statedb)
@@ -2144,9 +2150,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
 		storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them
 		snapshotCommitTimer.Update(statedb.SnapshotCommits) // Snapshot commits are complete, we can mark them
-		triedbCommitTimer.Update(statedb.TrieDBCommits)     // Triedb commits are complete, we can mark them
+		triedbCommitTimer.Update(statedb.TrieDBCommits)     // Trie database commits are complete, we can mark them
 
-		blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits - statedb.TrieDBCommits)
+		blockWriteTimer.Update(time.Since(wstart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits - statedb.TrieDBCommits)
 		blockInsertTimer.UpdateSince(start)
 
 		// Report the import stats before returning the various results
@@ -3314,5 +3320,5 @@ func (bc *BlockChain) SetBlockValidatorAndProcessorForTesting(v Validator, p Pro
 // The interval is in terms of block processing time, not wall clock.
 // It is thread-safe and can be called repeatedly without side effects.
 func (bc *BlockChain) SetTrieFlushInterval(interval time.Duration) {
-	atomic.StoreInt64(&bc.flushInterval, int64(interval))
+	bc.flushInterval.Store(int64(interval))
 }

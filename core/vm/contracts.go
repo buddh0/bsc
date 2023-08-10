@@ -22,9 +22,6 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
-	"golang.org/x/crypto/ripemd160"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -33,7 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/bn256"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	big2 "github.com/holiman/big"
+	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
+	"golang.org/x/crypto/ripemd160"
 )
 
 // PrecompiledContract is the basic interface for native Go contracts. The implementation
@@ -525,9 +523,9 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 	}
 	// Retrieve the operands and execute the exponentiation
 	var (
-		base = new(big2.Int).SetBytes(getData(input, 0, baseLen))
-		exp  = new(big2.Int).SetBytes(getData(input, baseLen, expLen))
-		mod  = new(big2.Int).SetBytes(getData(input, baseLen+expLen, modLen))
+		base = new(big.Int).SetBytes(getData(input, 0, baseLen))
+		exp  = new(big.Int).SetBytes(getData(input, baseLen, expLen))
+		mod  = new(big.Int).SetBytes(getData(input, baseLen+expLen, modLen))
 		v    []byte
 	)
 	switch {

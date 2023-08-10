@@ -38,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
@@ -157,7 +156,7 @@ func (p *LightStateProcessor) LightProcess(diffLayer *types.DiffLayer, block *ty
 		return nil, nil, 0, err
 	}
 	for des := range snapDestructs {
-		stateTrie.TryDelete(des[:])
+		stateTrie.DeleteAccount(des)
 	}
 	threads := gopool.Threads(len(snapAccounts))
 
@@ -196,19 +195,12 @@ func (p *LightStateProcessor) LightProcess(diffLayer *types.DiffLayer, block *ty
 				}
 
 				// fetch previous state
-				var previousAccount types.StateAccount
 				stateMux.Lock()
-				enc, err := stateTrie.TryGet(diffAccount[:])
+				previousAccount, err := stateTrie.GetAccount(diffAccount)
 				stateMux.Unlock()
 				if err != nil {
 					errChan <- err
 					return
-				}
-				if len(enc) != 0 {
-					if err := rlp.DecodeBytes(enc, &previousAccount); err != nil {
-						errChan <- err
-						return
-					}
 				}
 				if latestAccount.Balance == nil {
 					latestAccount.Balance = new(big.Int)
@@ -276,9 +268,9 @@ func (p *LightStateProcessor) LightProcess(diffLayer *types.DiffLayer, block *ty
 					}
 					for k, v := range storageChange {
 						if len(v) != 0 {
-							accountTrie.TryUpdate([]byte(k), v)
+							accountTrie.UpdateStorage(diffAccount, []byte(k), v)
 						} else {
-							accountTrie.TryDelete([]byte(k))
+							accountTrie.DeleteStorage(diffAccount, []byte(k))
 						}
 					}
 
@@ -304,13 +296,8 @@ func (p *LightStateProcessor) LightProcess(diffLayer *types.DiffLayer, block *ty
 					Root:     common.BytesToHash(latestAccount.Root),
 					CodeHash: latestAccount.CodeHash,
 				}
-				bz, err := rlp.EncodeToBytes(&latestStateAccount)
-				if err != nil {
-					errChan <- err
-					return
-				}
 				stateMux.Lock()
-				err = stateTrie.TryUpdate(diffAccount[:], bz)
+				err = stateTrie.UpdateAccount(diffAccount, &latestStateAccount)
 				stateMux.Unlock()
 				if err != nil {
 					errChan <- err
@@ -422,7 +409,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			}
 		}
 
-		msg, err := tx.AsMessage(signer, header.BaseFee)
+		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
 		if err != nil {
 			bloomProcessors.Close()
 			return statedb, nil, nil, 0, err
@@ -457,7 +444,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	return statedb, receipts, allLogs, *usedGas, nil
 }
 
-func applyTransaction(msg types.Message, config *params.ChainConfig, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, receiptProcessors ...ReceiptProcessor) (*types.Receipt, error) {
+func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, receiptProcessors ...ReceiptProcessor) (*types.Receipt, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
@@ -489,7 +476,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, gp *GasPool
 	receipt.GasUsed = result.UsedGas
 
 	// If the transaction created a contract, store the creation address in the receipt.
-	if msg.To() == nil {
+	if msg.To == nil {
 		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
 	}
 
@@ -509,7 +496,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, gp *GasPool
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
 func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config, receiptProcessors ...ReceiptProcessor) (*types.Receipt, error) {
-	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number), header.BaseFee)
+	msg, err := TransactionToMessage(tx, types.MakeSigner(config, header.Number), header.BaseFee)
 	if err != nil {
 		return nil, err
 	}

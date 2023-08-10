@@ -314,6 +314,9 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if chain.Config().IsShanghai(header.Time) {
 		return fmt.Errorf("ethash does not support shanghai fork")
 	}
+	if chain.Config().IsCancun(header.Time) {
+		return fmt.Errorf("ethash does not support cancun fork")
+	}
 	// Verify the engine specific seal securing the block
 	if seal {
 		if err := ethash.verifySeal(chain, header, false); err != nil {
@@ -322,9 +325,6 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	}
 	// If all checks passed, validate any special fields for hard forks
 	if err := misc.VerifyDAOHeaderExtraData(chain.Config(), header); err != nil {
-		return err
-	}
-	if err := misc.VerifyForkHashes(chain.Config(), header, uncle); err != nil {
 		return err
 	}
 	return nil
@@ -605,7 +605,6 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 	receipts []*types.Receipt, _ []*types.Transaction, _ *uint64) (err error) {
 	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, uncles)
-	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	return
 }
 
@@ -615,9 +614,12 @@ func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	if len(withdrawals) > 0 {
 		return nil, nil, errors.New("ethash does not support withdrawals")
 	}
-
 	// Finalize block
 	ethash.Finalize(chain, header, state, txs, uncles, nil, nil, nil, nil)
+
+	// Assign the final state root to header.
+	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+
 	// Header seems complete, assemble into a block and return
 	return types.NewBlock(header, txs, uncles, receipts, trie.NewStackTrie(nil)), receipts, nil
 }

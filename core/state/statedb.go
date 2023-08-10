@@ -99,8 +99,10 @@ type StateDB struct {
 	// DB error.
 	// State objects are used by the consensus core and VM which are
 	// unable to deal with database-level errors. Any error that occurs
-	// during a database read is memoized here and will eventually be returned
-	// by StateDB.Commit.
+	// during a database read is memoized here and will eventually be
+	// returned by StateDB.Commit. Notably, this error is also shared
+	// by all cached state objects in case the database failure occurs
+	// when accessing state of accounts.
 	dbErr error
 
 	// The refund counter, also used by state transitioning.
@@ -286,7 +288,7 @@ func (s *StateDB) TriePrefetchInAdvance(block *types.Block, signer types.Signer)
 	}
 
 	if len(addressesToPrefetch) > 0 {
-		prefetcher.prefetch(common.Hash{}, s.originalRoot, addressesToPrefetch)
+		prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, addressesToPrefetch)
 	}
 }
 
@@ -332,6 +334,7 @@ func (s *StateDB) NoTrie() bool {
 	return s.noTrie
 }
 
+// Error returns the memorized database failure occurred earlier.
 func (s *StateDB) Error() error {
 	return s.dbErr
 }
@@ -659,13 +662,11 @@ func (s *StateDB) SetTransientState(addr common.Address, key, value common.Hash)
 	if prev == value {
 		return
 	}
-
 	s.journal.append(transientStorageChange{
 		account:  &addr,
 		key:      key,
 		prevalue: prev,
 	})
-
 	s.setTransientState(addr, key, value)
 }
 
@@ -695,7 +696,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	}
 	// Encode the account and update the account trie
 	addr := obj.Address()
-	if err := s.trie.TryUpdateAccount(addr, &obj.data); err != nil {
+	if err := s.trie.UpdateAccount(addr, &obj.data); err != nil {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 	}
 }
@@ -711,7 +712,7 @@ func (s *StateDB) deleteStateObject(obj *stateObject) {
 	}
 	// Delete the account from the trie
 	addr := obj.Address()
-	if err := s.trie.TryDeleteAccount(addr); err != nil {
+	if err := s.trie.DeleteAccount(addr); err != nil {
 		s.setError(fmt.Errorf("deleteStateObject (%x) error: %v", addr[:], err))
 	}
 }
@@ -774,7 +775,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		}
 		start := time.Now()
 		var err error
-		data, err = s.trie.TryGetAccount(addr)
+		data, err = s.trie.GetAccount(addr)
 		if metrics.EnabledExpensive {
 			s.AccountReads += time.Since(start)
 		}
@@ -1087,9 +1088,9 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 	prefetcher := s.prefetcher
 	if prefetcher != nil && len(addressesToPrefetch) > 0 {
 		if s.snap.Verified() {
-			prefetcher.prefetch(common.Hash{}, s.originalRoot, addressesToPrefetch)
+			prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, addressesToPrefetch)
 		} else if prefetcher.rootParent != (common.Hash{}) {
-			prefetcher.prefetch(common.Hash{}, prefetcher.rootParent, addressesToPrefetch)
+			prefetcher.prefetch(common.Hash{}, prefetcher.rootParent, common.Address{}, addressesToPrefetch)
 		}
 	}
 	// Invalidate journal because reverting across transactions is not allowed.
@@ -1452,6 +1453,7 @@ func (s *StateDB) LightCommit() (common.Hash, *types.DiffLayer, error) {
 
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(failPostCommitFunc func(), postCommitFuncs ...func() error) (common.Hash, *types.DiffLayer, error) {
+	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		s.StopPrefetcher()
 		return common.Hash{}, nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)

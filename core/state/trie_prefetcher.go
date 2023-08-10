@@ -40,6 +40,7 @@ var (
 type prefetchMsg struct {
 	owner common.Hash
 	root  common.Hash
+	addr  common.Address
 	keys  [][]byte
 }
 
@@ -121,7 +122,7 @@ func (p *triePrefetcher) mainLoop() {
 			id := p.trieID(pMsg.owner, pMsg.root)
 			fetcher := p.fetchers[id]
 			if fetcher == nil {
-				fetcher = newSubfetcher(p.db, p.root, pMsg.owner, pMsg.root)
+				fetcher = newSubfetcher(p.db, p.root, pMsg.owner, pMsg.root, pMsg.addr)
 				p.fetchersMutex.Lock()
 				p.fetchers[id] = fetcher
 				p.fetchersMutex.Unlock()
@@ -265,14 +266,14 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 }
 
 // prefetch schedules a batch of trie items to prefetch.
-func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, keys [][]byte) {
+func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr common.Address, keys [][]byte) {
 	// If the prefetcher is an inactive one, bail out
 	if p.fetches != nil {
 		return
 	}
 	select {
 	case <-p.closeMainChan: // skip closed trie prefetcher
-	case p.prefetchChan <- &prefetchMsg{owner, root, keys}:
+	case p.prefetchChan <- &prefetchMsg{owner, root, addr, keys}:
 	}
 }
 
@@ -347,11 +348,12 @@ func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
 // main prefetcher is paused and either all requested items are processed or if
 // the trie being worked on is retrieved from the prefetcher.
 type subfetcher struct {
-	db    Database    // Database to load trie nodes through
-	state common.Hash // Root hash of the state to prefetch
-	owner common.Hash // Owner of the trie, usually account hash
-	root  common.Hash // Root hash of the trie to prefetch
-	trie  Trie        // Trie being populated with nodes
+	db    Database       // Database to load trie nodes through
+	state common.Hash    // Root hash of the state to prefetch
+	owner common.Hash    // Owner of the trie, usually account hash
+	root  common.Hash    // Root hash of the trie to prefetch
+	addr  common.Address // Address of the account that the trie belongs to
+	trie  Trie           // Trie being populated with nodes
 
 	tasks [][]byte   // Items queued up for retrieval
 	lock  sync.Mutex // Lock protecting the task queue
@@ -371,12 +373,13 @@ type subfetcher struct {
 
 // newSubfetcher creates a goroutine to prefetch state items belonging to a
 // particular root hash.
-func newSubfetcher(db Database, state common.Hash, owner common.Hash, root common.Hash) *subfetcher {
+func newSubfetcher(db Database, state common.Hash, owner common.Hash, root common.Hash, addr common.Address) *subfetcher {
 	sf := &subfetcher{
 		db:    db,
 		state: state,
 		owner: owner,
 		root:  root,
+		addr:  addr,
 		wake:  make(chan struct{}, 1),
 		stop:  make(chan struct{}),
 		term:  make(chan struct{}),
@@ -429,7 +432,7 @@ func (sf *subfetcher) scheduleParallel(keys [][]byte) {
 	keysLeft := keys[keyIndex:]
 	keysLeftSize := len(keysLeft)
 	for i := 0; i*parallelTriePrefetchCapacity < keysLeftSize; i++ {
-		child := newSubfetcher(sf.db, sf.state, sf.owner, sf.root)
+		child := newSubfetcher(sf.db, sf.state, sf.owner, sf.root, sf.addr)
 		sf.paraChildren = append(sf.paraChildren, child)
 		endIndex := (i + 1) * parallelTriePrefetchCapacity
 		if endIndex >= keysLeftSize {
@@ -530,7 +533,11 @@ func (sf *subfetcher) loop() {
 					if _, ok := sf.seen[string(task)]; ok {
 						sf.dups++
 					} else {
-						sf.trie.TryGet(task)
+						if len(task) == common.AddressLength {
+							sf.trie.GetAccount(common.BytesToAddress(task))
+						} else {
+							sf.trie.GetStorage(sf.addr, task)
+						}
 						sf.seen[string(task)] = struct{}{}
 					}
 					atomic.AddUint32(&sf.pendingSize, ^uint32(0)) // decrease

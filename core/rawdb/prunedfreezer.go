@@ -74,7 +74,7 @@ func (f *prunedfreezer) repair(datadir string) error {
 		if err != nil {
 			return err
 		}
-		items := atomic.LoadUint64(&table.items)
+		items := table.items.Load()
 		if min > items {
 			min = items
 		}
