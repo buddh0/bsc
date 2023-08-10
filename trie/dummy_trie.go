@@ -81,38 +81,3 @@ func (t *EmptyTrie) Copy() *EmptyTrie {
 	cpy := *t
 	return &cpy
 }
-
-// func (t *EmptyTrie) MustGet(key []byte) []byte {
-// 	return nil
-// }
-
-// func (t *EmptyTrie) Get(key []byte) ([]byte, error) {
-// 	return nil, nil
-// }
-
-// func (t *EmptyTrie) GetNode(path []byte) ([]byte, int, error) {
-// 	return nil, 0, nil
-// }
-
-// func (t *EmptyTrie) MustUpdate(key, value []byte) {}
-
-// func (t *EmptyTrie) Update(key, value []byte) error {
-// 	return nil
-// }
-
-// // Delete removes any existing value for key from the trie.
-// func (t *EmptyTrie) MustDelete(key []byte) {
-// 	if err := t.Delete(key); err != nil {
-// 		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
-// 	}
-// }
-
-// func (t *EmptyTrie) Delete(key []byte) error {
-
-// 	return nil
-// }
-
-// func (t *EmptyTrie) ResetCopy() *EmptyTrie {
-// 	cpy := *t
-// 	return &cpy
-// }

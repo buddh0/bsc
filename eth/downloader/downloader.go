@@ -152,10 +152,10 @@ type Downloader struct {
 	quitLock sync.Mutex    // Lock to prevent double closes
 
 	// Testing hooks
-	syncInitHook     func(uint64, uint64)  // Method to call upon initiating a new sync run
-	bodyFetchHook    func([]*types.Header) // Method to call upon starting a block body fetch
-	receiptFetchHook func([]*types.Header) // Method to call upon starting a receipt fetch
-	chainInsertHook  func([]*fetchResult)  // Method to call upon inserting a chain of blocks (possibly in multiple invocations)
+	syncInitHook     func(uint64, uint64)                // Method to call upon initiating a new sync run
+	bodyFetchHook    func([]*types.Header)               // Method to call upon starting a block body fetch
+	receiptFetchHook func([]*types.Header)               // Method to call upon starting a receipt fetch
+	chainInsertHook  func([]*fetchResult, chan struct{}) // Method to call upon inserting a chain of blocks (possibly in multiple invocations)
 
 	// Progress reporting metrics
 	syncStartBlock uint64    // Head snap block when Geth was started
@@ -1486,8 +1486,9 @@ func (d *Downloader) processFullSyncContent(ttd *big.Int, beaconMode bool) error
 		if len(results) == 0 {
 			return nil
 		}
+		stop := make(chan struct{})
 		if d.chainInsertHook != nil {
-			d.chainInsertHook(results)
+			d.chainInsertHook(results, stop)
 		}
 		if err := d.importBlockResults(results); err != nil {
 			close(stop)
@@ -1586,7 +1587,7 @@ func (d *Downloader) processSnapSyncContent() error {
 			}
 		}
 		if d.chainInsertHook != nil {
-			d.chainInsertHook(results)
+			d.chainInsertHook(results, nil)
 		}
 		d.reportSnapSyncProgress(false)
 

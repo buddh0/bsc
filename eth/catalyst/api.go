@@ -18,8 +18,6 @@
 package catalyst
 
 import (
-	"errors"
-	"fmt"
 	"sync"
 	"time"
 
