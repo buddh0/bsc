@@ -371,13 +371,12 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 			}
 			s.db.snapStorageMux.Unlock()
 			for key, value := range dirtyStorage {
-				khash := crypto.HashData(s.db.hasher, key[:])
 				// rlp-encoded value to be used by the snapshot
 				var snapshotVal []byte
 				if len(value) != 0 {
 					snapshotVal, _ = rlp.EncodeToBytes(value)
 				}
-				storage[khash] = snapshotVal // snapshotVal will be nil if it's deleted
+				storage[crypto.HashData(s.db.hasher, key[:])] = snapshotVal // snapshotVal will be nil if it's deleted
 			}
 		}()
 	}

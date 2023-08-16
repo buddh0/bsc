@@ -1974,14 +1974,14 @@ func (s *TransactionAPI) GetTransactionDataAndReceipt(ctx context.Context, hash 
 	receipt := receipts[index]
 
 	// Derive the sender.
-	block, err := s.b.BlockByHash(ctx, hash)
+	header, err := s.b.HeaderByHash(ctx, hash)
 	if err != nil {
 		return nil, err
 	}
-	signer := types.MakeSigner(s.b.ChainConfig(), block.Number(), block.Time())
+	signer := types.MakeSigner(s.b.ChainConfig(), header.Number, header.Time)
 	from, _ := types.Sender(signer, tx)
 	// TODO use nil basefee before landon fork is enabled
-	rpcTransaction := newRPCTransaction(tx, blockHash, blockNumber, block.Time(), index, nil, s.b.ChainConfig())
+	rpcTransaction := newRPCTransaction(tx, blockHash, blockNumber, header.Time, index, nil, s.b.ChainConfig())
 
 	txData := map[string]interface{}{
 		"blockHash":        rpcTransaction.BlockHash.String(),

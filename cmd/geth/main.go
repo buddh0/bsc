@@ -131,7 +131,6 @@ var (
 		utils.MinerEtherbaseFlag,
 		utils.MinerExtraDataFlag,
 		utils.MinerRecommitIntervalFlag,
-		utils.MinerNoVerfiyFlag,
 		utils.MinerDelayLeftoverFlag,
 		utils.MinerNewPayloadTimeout,
 		utils.NATFlag,

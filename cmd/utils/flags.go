@@ -76,7 +76,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 // These are all the command line flags we support.
@@ -555,11 +554,6 @@ var (
 		Name:  "miner.delayleftover",
 		Usage: "Time reserved to finalize a block",
 		Value: ethconfig.Defaults.Miner.DelayLeftOver,
-	}
-	MinerNoVerfiyFlag = &cli.BoolFlag{
-		Name:     "miner.noverify",
-		Usage:    "Disable remote sealing verification",
-		Category: flags.MinerCategory,
 	}
 	MinerNewPayloadTimeout = &cli.DurationFlag{
 		Name:     "miner.newpayload-timeout",
@@ -2357,9 +2351,9 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockChain, ethdb.Database) {
 	var (
 		gspec   = MakeGenesis(ctx)
-		chainDb = MakeChainDatabase(ctx, stack, false, false)
+		chainDb = MakeChainDatabase(ctx, stack, readonly, false)
 	)
-	config, genesisHash, err := core.SetupGenesisBlock(chainDb, trie.NewDatabase(chainDb), gspec)
+	config, genesisHash, err := core.LoadChainConfig(chainDb, gspec)
 	if err != nil {
 		Fatalf("%v", err)
 	}

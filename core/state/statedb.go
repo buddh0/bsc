@@ -1196,7 +1196,7 @@ func (s *StateDB) populateSnapStorage(obj *stateObject) bool {
 					obj.db.snapStorage[obj.address] = storage
 				}
 			}
-			storage[key] = v // v will be nil if value is 0x00
+			storage[crypto.HashData(s.hasher, key[:])] = v // v will be nil if value is 0x00
 		}
 	}
 	return true

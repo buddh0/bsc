@@ -3282,9 +3282,8 @@ func CalculateDiffHash(d *types.DiffLayer) (common.Hash, error) {
 			return common.Hash{}, fmt.Errorf("decode full account error: %v", err)
 		}
 		// set account root to empty root
-		fullCopy := *full
-		fullCopy.Root = types.EmptyRootHash
-		diff.Accounts[index].Blob = types.SlimAccountRLP(fullCopy)
+		full.Root = types.EmptyRootHash
+		diff.Accounts[index].Blob = types.SlimAccountRLP(*full)
 	}
 
 	rawData, err := rlp.EncodeToBytes(diff)
