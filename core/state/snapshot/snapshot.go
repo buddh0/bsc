@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -114,11 +115,11 @@ type Snapshot interface {
 
 	// Account directly retrieves the account associated with a particular hash in
 	// the snapshot slim data format.
-	Account(hash common.Hash) (*Account, error)
+	Account(hash common.Hash) (*types.SlimAccount, error)
 
 	// Accounts directly retrieves all accounts in current snapshot in
 	// the snapshot slim data format.
-	Accounts() (map[common.Hash]*Account, error)
+	Accounts() (map[common.Hash]*types.SlimAccount, error)
 
 	// AccountRLP directly retrieves the account RLP associated with a particular
 	// hash in the snapshot slim data format.
@@ -357,7 +358,7 @@ func (t *Tree) Snapshots(root common.Hash, limits int, nodisk bool) []Snapshot {
 	return ret
 }
 
-func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, hashDestructs map[common.Hash]struct{}, accounts map[common.Address][]byte, storage map[common.Address]map[string][]byte, verified chan struct{}) error {
+func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, hashDestructs map[common.Hash]struct{}, accounts map[common.Address][]byte, storage map[common.Address]map[common.Hash][]byte, verified chan struct{}) error {
 	hashAccounts, hashStorage := transformSnapData(accounts, storage)
 	return t.update(blockRoot, parentRoot, hashDestructs, hashAccounts, hashStorage, verified)
 }
@@ -890,20 +891,15 @@ func (t *Tree) DiskRoot() common.Hash {
 
 // TODO we can further improve it when the set is very large
 func transformSnapData(accounts map[common.Address][]byte,
-	storage map[common.Address]map[string][]byte) (map[common.Hash][]byte,
+	storage map[common.Address]map[common.Hash][]byte) (map[common.Hash][]byte,
 	map[common.Hash]map[common.Hash][]byte) {
-	hasher := crypto.NewKeccakState()
 	hashAccounts := make(map[common.Hash][]byte, len(accounts))
 	hashStorages := make(map[common.Hash]map[common.Hash][]byte, len(storage))
 	for addr, account := range accounts {
 		hashAccounts[crypto.Keccak256Hash(addr[:])] = account
 	}
 	for addr, accountStore := range storage {
-		hashStorage := make(map[common.Hash][]byte, len(accountStore))
-		for k, v := range accountStore {
-			hashStorage[crypto.HashData(hasher, []byte(k))] = v
-		}
-		hashStorages[crypto.Keccak256Hash(addr[:])] = hashStorage
+		hashStorages[crypto.Keccak256Hash(addr[:])] = accountStore
 	}
 	return hashAccounts, hashStorages
 }

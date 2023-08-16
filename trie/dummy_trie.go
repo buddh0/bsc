@@ -19,6 +19,7 @@ package trie
 import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -58,7 +59,7 @@ func (t *EmptyTrie) DeleteAccount(address common.Address) error {
 	return nil
 }
 
-func (t *EmptyTrie) Commit(collectLeaf bool) (common.Hash, *NodeSet) {
+func (t *EmptyTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 	return common.Hash{}, nil
 }
 

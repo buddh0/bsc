@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 type Code []byte
@@ -222,14 +222,22 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 	}
 	// If no live objects are available, attempt to use snapshots
 	var (
-		enc []byte
-		err error
+		enc   []byte
+		err   error
+		value common.Hash
 	)
 	if s.db.snap != nil {
 		start := time.Now()
 		enc, err = s.db.snap.Storage(s.addrHash, crypto.Keccak256Hash(key.Bytes()))
 		if metrics.EnabledExpensive {
 			s.db.SnapshotStorageReads += time.Since(start)
+		}
+		if len(enc) > 0 {
+			_, content, _, err := rlp.Split(enc)
+			if err != nil {
+				s.db.setError(err)
+			}
+			value.SetBytes(content)
 		}
 	}
 	// If the snapshot is unavailable or reading from it fails, load from the database.
@@ -240,7 +248,7 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 			s.db.setError(err)
 			return common.Hash{}
 		}
-		enc, err = tr.GetStorage(s.address, key.Bytes())
+		val, err := tr.GetStorage(s.address, key.Bytes())
 		if metrics.EnabledExpensive {
 			s.db.StorageReads += time.Since(start)
 		}
@@ -248,14 +256,7 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 			s.db.setError(err)
 			return common.Hash{}
 		}
-	}
-	var value common.Hash
-	if len(enc) > 0 {
-		_, content, _, err := rlp.Split(enc)
-		if err != nil {
-			s.db.setError(err)
-		}
-		value.SetBytes(content)
+		value.SetBytes(val)
 	}
 	s.setOriginStorage(key, value)
 	return value
@@ -333,7 +334,7 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 		var v []byte
 		if value != (common.Hash{}) {
 			// Encoding []byte cannot fail, ok to ignore the error.
-			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
+			v = common.TrimLeftZeroes(value[:])
 		}
 		dirtyStorage[key] = v
 	}
@@ -365,12 +366,18 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 			// The snapshot storage map for the object
 			storage := s.db.snapStorage[s.address]
 			if storage == nil {
-				storage = make(map[string][]byte, len(dirtyStorage))
+				storage = make(map[common.Hash][]byte, len(dirtyStorage))
 				s.db.snapStorage[s.address] = storage
 			}
 			s.db.snapStorageMux.Unlock()
 			for key, value := range dirtyStorage {
-				storage[string(key[:])] = value
+				khash := crypto.HashData(s.db.hasher, key[:])
+				// rlp-encoded value to be used by the snapshot
+				var snapshotVal []byte
+				if len(value) != 0 {
+					snapshotVal, _ = rlp.EncodeToBytes(value)
+				}
+				storage[khash] = snapshotVal // snapshotVal will be nil if it's deleted
 			}
 		}()
 	}
@@ -417,7 +424,7 @@ func (s *stateObject) updateRoot(db Database) {
 
 // commitTrie submits the storage changes into the storage trie and re-computes
 // the root. Besides, all trie changes will be collected in a nodeset and returned.
-func (s *stateObject) commitTrie(db Database) (*trie.NodeSet, error) {
+func (s *stateObject) commitTrie(db Database) (*trienode.NodeSet, error) {
 	tr, err := s.updateTrie(db)
 	if err != nil {
 		return nil, err

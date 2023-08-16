@@ -17,11 +17,8 @@
 package params
 
 import (
-	"encoding/binary"
 	"fmt"
 	"math/big"
-
-	"golang.org/x/crypto/sha3"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -34,18 +31,6 @@ var (
 	ChapelGenesisHash = common.HexToHash("0x6d3c66c5357ec91d5c43af47e234a939b22557cbb552dc45bebbceeed90fbe34")
 	RialtoGenesisHash = common.HexToHash("0xee835a629f9cf5510b48b6ba41d69e0ff7d6ef10f977166ef939db41f59f5501")
 )
-
-// TrustedCheckpoints associates each known checkpoint with the genesis hash of
-// the chain it belongs to.
-var TrustedCheckpoints = map[common.Hash]*TrustedCheckpoint{
-	MainnetGenesisHash: MainnetTrustedCheckpoint,
-}
-
-// CheckpointOracles associates each known checkpoint oracles with the genesis hash of
-// the chain it belongs to.
-var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
-	MainnetGenesisHash: MainnetCheckpointOracle,
-}
 
 func newUint64(val uint64) *uint64 { return &val }
 
@@ -152,27 +137,6 @@ var (
 			Period: 15,
 			Epoch:  30000,
 		},
-	}
-
-	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
-	MainnetTrustedCheckpoint = &TrustedCheckpoint{
-		SectionIndex: 506,
-		SectionHead:  common.HexToHash("0x3d1a139a6fc7764211236ef7c64d9e8c1fe55b358d7414e25277bac1144486cd"),
-		CHTRoot:      common.HexToHash("0xef7fc3321a239a54238593bdf68d82933d903cb533b0d03228a8d958cd35ea77"),
-		BloomRoot:    common.HexToHash("0x51d7bfe7c6397b1caa8b1cb046de4aeaf7e7fbd3fb6c726b60bf750de78809e8"),
-	}
-
-	// MainnetCheckpointOracle contains a set of configs for the main network oracle.
-	MainnetCheckpointOracle = &CheckpointOracleConfig{
-		Address: common.HexToAddress("0x9a9070028361F7AAbeB3f2F2Dc07F82C4a98A02a"),
-		Signers: []common.Address{
-			common.HexToAddress("0x1b2C260efc720BE89101890E4Db589b44E950527"), // Peter
-			common.HexToAddress("0x78d1aD571A1A09D60D9BBf25894b44e4C8859595"), // Martin
-			common.HexToAddress("0x286834935f4A8Cfb4FF4C77D5770C2775aE2b0E7"), // Zsolt
-			common.HexToAddress("0xb86e2B0Ab5A4B1373e40c51A7C712c70Ba2f9f8E"), // Gary
-			common.HexToAddress("0x0DF8fa387C602AE62559cC4aFa4972A7045d6707"), // Guillaume
-		},
-		Threshold: 2,
 	}
 
 	BSCChainConfig = &ChainConfig{
@@ -340,7 +304,7 @@ var (
 		CancunTime:                    nil,
 		PragueTime:                    nil,
 		TerminalTotalDifficulty:       nil,
-		TerminalTotalDifficultyPassed: false,
+		TerminalTotalDifficultyPassed: true,
 		Ethash:                        new(EthashConfig),
 		Clique:                        nil,
 	}
@@ -437,54 +401,6 @@ var (
 // NetworkNames are user friendly names to use in the chain spec banner.
 var NetworkNames = map[string]string{
 	MainnetChainConfig.ChainID.String(): "mainnet",
-}
-
-// TrustedCheckpoint represents a set of post-processed trie roots (CHT and
-// BloomTrie) associated with the appropriate section index and head hash. It is
-// used to start light syncing from this checkpoint and avoid downloading the
-// entire header chain while still being able to securely access old headers/logs.
-type TrustedCheckpoint struct {
-	SectionIndex uint64      `json:"sectionIndex"`
-	SectionHead  common.Hash `json:"sectionHead"`
-	CHTRoot      common.Hash `json:"chtRoot"`
-	BloomRoot    common.Hash `json:"bloomRoot"`
-}
-
-// HashEqual returns an indicator comparing the itself hash with given one.
-func (c *TrustedCheckpoint) HashEqual(hash common.Hash) bool {
-	if c.Empty() {
-		return hash == common.Hash{}
-	}
-	return c.Hash() == hash
-}
-
-// Hash returns the hash of checkpoint's four key fields(index, sectionHead, chtRoot and bloomTrieRoot).
-func (c *TrustedCheckpoint) Hash() common.Hash {
-	var sectionIndex [8]byte
-	binary.BigEndian.PutUint64(sectionIndex[:], c.SectionIndex)
-
-	w := sha3.NewLegacyKeccak256()
-	w.Write(sectionIndex[:])
-	w.Write(c.SectionHead[:])
-	w.Write(c.CHTRoot[:])
-	w.Write(c.BloomRoot[:])
-
-	var h common.Hash
-	w.Sum(h[:0])
-	return h
-}
-
-// Empty returns an indicator whether the checkpoint is regarded as empty.
-func (c *TrustedCheckpoint) Empty() bool {
-	return c.SectionHead == (common.Hash{}) || c.CHTRoot == (common.Hash{}) || c.BloomRoot == (common.Hash{})
-}
-
-// CheckpointOracleConfig represents a set of checkpoint contract(which acts as an oracle)
-// config which used for light client checkpoint syncing.
-type CheckpointOracleConfig struct {
-	Address   common.Address   `json:"address"`
-	Signers   []common.Address `json:"signers"`
-	Threshold uint64           `json:"threshold"`
 }
 
 // ChainConfig is the core config which determines the blockchain settings.
@@ -830,18 +746,18 @@ func (c *ChainConfig) IsOnPlanck(num *big.Int) bool {
 }
 
 // IsShanghai returns whether time is either equal to the Shanghai fork time or greater.
-func (c *ChainConfig) IsShanghai(time uint64) bool {
-	return isTimestampForked(c.ShanghaiTime, time)
+func (c *ChainConfig) IsShanghai(num *big.Int, time uint64) bool {
+	return c.IsLondon(num) && isTimestampForked(c.ShanghaiTime, time)
 }
 
 // IsCancun returns whether num is either equal to the Cancun fork time or greater.
-func (c *ChainConfig) IsCancun(time uint64) bool {
-	return isTimestampForked(c.CancunTime, time)
+func (c *ChainConfig) IsCancun(num *big.Int, time uint64) bool {
+	return c.IsLondon(num) && isTimestampForked(c.CancunTime, time)
 }
 
 // IsPrague returns whether num is either equal to the Prague fork time or greater.
-func (c *ChainConfig) IsPrague(time uint64) bool {
-	return isTimestampForked(c.PragueTime, time)
+func (c *ChainConfig) IsPrague(num *big.Int, time uint64) bool {
+	return c.IsLondon(num) && isTimestampForked(c.PragueTime, time)
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
@@ -1207,8 +1123,8 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsLuban:          c.IsLuban(num),
 		IsPlato:          c.IsPlato(num),
 		IsHertz:          c.IsHertz(num),
-		IsShanghai:       c.IsShanghai(timestamp),
-		IsCancun:         c.IsCancun(timestamp),
-		IsPrague:         c.IsPrague(timestamp),
+		IsShanghai:       c.IsShanghai(num, timestamp),
+		IsCancun:         c.IsCancun(num, timestamp),
+		IsPrague:         c.IsPrague(num, timestamp),
 	}
 }

@@ -51,7 +51,7 @@ func NewStatePrefetcher(config *params.ChainConfig, bc *BlockChain, engine conse
 func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, cfg *vm.Config, interruptCh <-chan struct{}) {
 	var (
 		header = block.Header()
-		signer = types.MakeSigner(p.config, header.Number)
+		signer = types.MakeSigner(p.config, header.Number, header.Time)
 	)
 	transactions := block.Transactions()
 	txChan := make(chan int, prefetchThread)
@@ -99,7 +99,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 // the transaction messages using the statedb, but any changes are discarded. The
 // only goal is to pre-cache transaction signatures and snapshot clean state. Only used for mining stage
 func (p *statePrefetcher) PrefetchMining(txs *types.TransactionsByPriceAndNonce, header *types.Header, gasLimit uint64, statedb *state.StateDB, cfg vm.Config, interruptCh <-chan struct{}, txCurr **types.Transaction) {
-	var signer = types.MakeSigner(p.config, header.Number)
+	var signer = types.MakeSigner(p.config, header.Number, header.Time)
 
 	txCh := make(chan *types.Transaction, 2*prefetchThread)
 	for i := 0; i < prefetchThread; i++ {

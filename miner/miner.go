@@ -46,15 +46,12 @@ type Backend interface {
 // Config is the configuration parameters of mining.
 type Config struct {
 	Etherbase     common.Address `toml:",omitempty"` // Public address for block mining rewards
-	Notify        []string       `toml:",omitempty"` // HTTP URL list to be notified of new work packages (only useful in ethash).
-	NotifyFull    bool           `toml:",omitempty"` // Notify with pending block headers instead of work packages
 	ExtraData     hexutil.Bytes  `toml:",omitempty"` // Block extra data set by the miner
 	DelayLeftOver time.Duration  // Time reserved to finalize a block(calculate root, distribute income...)
 	GasFloor      uint64         // Target gas floor for mined blocks.
 	GasCeil       uint64         // Target gas ceiling for mined blocks.
 	GasPrice      *big.Int       // Minimum gas price for mining a transaction
 	Recommit      time.Duration  // The time interval for miner to re-create mining work.
-	Noverify      bool           // Disable remote mining solution verification(only useful in ethash).
 	VoteEnable    bool           // Whether to vote when mining
 
 	NewPayloadTimeout time.Duration // The maximum time allowance for creating a new payload
@@ -137,16 +134,22 @@ func (miner *Miner) update() {
 					shouldStart = true
 					log.Info("Mining aborted due to sync")
 				}
+				miner.worker.syncing.Store(true)
+
 			case downloader.FailedEvent:
 				canStart = true
 				if shouldStart {
 					miner.worker.start()
 				}
+				miner.worker.syncing.Store(false)
+
 			case downloader.DoneEvent:
 				canStart = true
 				if shouldStart {
 					miner.worker.start()
 				}
+				miner.worker.syncing.Store(false)
+
 				// Stop reacting to downloader events
 				events.Unsubscribe()
 			}
@@ -202,7 +205,8 @@ func (miner *Miner) SetRecommitInterval(interval time.Duration) {
 	miner.worker.setRecommitInterval(interval)
 }
 
-// Pending returns the currently pending block and associated state.
+// Pending returns the currently pending block and associated state. The returned
+// values can be nil in case the pending block is not initialized
 func (miner *Miner) Pending() (*types.Block, *state.StateDB) {
 	if miner.worker.isRunning() {
 		pendingBlock, pendingState := miner.worker.pending()
@@ -222,7 +226,8 @@ func (miner *Miner) Pending() (*types.Block, *state.StateDB) {
 	return miner.worker.chain.GetBlockByHash(block.Hash()), stateDb
 }
 
-// PendingBlock returns the currently pending block.
+// PendingBlock returns the currently pending block. The returned block can be
+// nil in case the pending block is not initialized.
 //
 // Note, to access both the pending block and the pending state
 // simultaneously, please use Pending(), as the pending state can
@@ -239,6 +244,7 @@ func (miner *Miner) PendingBlock() *types.Block {
 }
 
 // PendingBlockAndReceipts returns the currently pending block and corresponding receipts.
+// The returned values can be nil in case the pending block is not initialized.
 func (miner *Miner) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 	return miner.worker.pendingBlockAndReceipts()
 }

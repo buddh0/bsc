@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/systemcontracts"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -105,7 +104,7 @@ func (p *LightStateProcessor) Process(block *types.Block, statedb *state.StateDB
 			time.Sleep(time.Millisecond)
 		}
 		if diffLayer != nil {
-			if err := diffLayer.Receipts.DeriveFields(p.bc.chainConfig, block.Hash(), block.NumberU64(), block.BaseFee(), block.Transactions()); err != nil {
+			if err := diffLayer.Receipts.DeriveFields(p.bc.chainConfig, block.Hash(), block.NumberU64(), block.Time(), block.BaseFee(), block.Transactions()); err != nil {
 				log.Error("Failed to derive block receipts fields", "hash", block.Hash(), "number", block.NumberU64(), "err", err)
 				// fallback to full process
 				return p.StateProcessor.Process(block, statedb, cfg)
@@ -188,7 +187,7 @@ func (p *LightStateProcessor) LightProcess(diffLayer *types.DiffLayer, block *ty
 				blob := snapAccounts[diffAccount]
 				snapMux.RUnlock()
 				addrHash := crypto.Keccak256Hash(diffAccount[:])
-				latestAccount, err := snapshot.FullAccount(blob)
+				latestAccount, err := types.FullAccount(blob)
 				if err != nil {
 					errChan <- err
 					return
@@ -219,7 +218,7 @@ func (p *LightStateProcessor) LightProcess(diffLayer *types.DiffLayer, block *ty
 				if previousAccount.Nonce == latestAccount.Nonce &&
 					bytes.Equal(previousAccount.CodeHash, latestAccount.CodeHash) &&
 					previousAccount.Balance.Cmp(latestAccount.Balance) == 0 &&
-					previousAccount.Root == common.BytesToHash(latestAccount.Root) {
+					previousAccount.Root == latestAccount.Root {
 					// It is normal to receive redundant message since the collected message is redundant.
 					log.Debug("receive redundant account change in diff layer", "account", diffAccount, "num", block.NumberU64())
 					snapMux.Lock()
@@ -251,7 +250,7 @@ func (p *LightStateProcessor) LightProcess(diffLayer *types.DiffLayer, block *ty
 				}
 
 				//update storage
-				latestRoot := common.BytesToHash(latestAccount.Root)
+				latestRoot := latestAccount.Root
 				if latestRoot != previousAccount.Root {
 					accountTrie, err := statedb.Database().OpenStorageTrie(statedb.GetOriginalRoot(), addrHash, previousAccount.Root)
 					if err != nil {
@@ -267,11 +266,13 @@ func (p *LightStateProcessor) LightProcess(diffLayer *types.DiffLayer, block *ty
 						return
 					}
 					for k, v := range storageChange {
+						// TODO(Nathan), It's wrong here. because k is a hashed value, but UpdateStorage and DeleteStorage need unhashed one
 						if len(v) != 0 {
-							accountTrie.UpdateStorage(diffAccount, []byte(k), v)
+							accountTrie.UpdateStorage(diffAccount, k[:], v)
 						} else {
-							accountTrie.DeleteStorage(diffAccount, []byte(k))
+							accountTrie.DeleteStorage(diffAccount, k[:])
 						}
+						panic("diffsync is not supported now")
 					}
 
 					// check storage root
@@ -293,7 +294,7 @@ func (p *LightStateProcessor) LightProcess(diffLayer *types.DiffLayer, block *ty
 				latestStateAccount := types.StateAccount{
 					Nonce:    latestAccount.Nonce,
 					Balance:  latestAccount.Balance,
-					Root:     common.BytesToHash(latestAccount.Root),
+					Root:     latestAccount.Root,
 					CodeHash: latestAccount.CodeHash,
 				}
 				stateMux.Lock()
@@ -382,10 +383,12 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	// Handle upgrade build-in system contract code
 	systemcontracts.UpgradeBuildInSystemContract(p.config, block.Number(), statedb)
 
-	blockContext := NewEVMBlockContext(header, p.bc, nil)
-	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
-
-	txNum := len(block.Transactions())
+	var (
+		context = NewEVMBlockContext(header, p.bc, nil)
+		vmenv   = vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
+		signer  = types.MakeSigner(p.config, header.Number, header.Time)
+		txNum   = len(block.Transactions())
+	)
 	// Iterate over and process the individual transactions
 	posa, isPoSA := p.engine.(consensus.PoSA)
 	commonTxs := make([]*types.Transaction, 0, txNum)
@@ -393,7 +396,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	// initialise bloom processors
 	bloomProcessors := NewAsyncReceiptBloomGenerator(txNum)
 	statedb.MarkFullProcessed()
-	signer := types.MakeSigner(p.config, header.Number)
 
 	// usually do have two tx, one for validator set contract, another for system reward contract.
 	systemTxs := make([]*types.Transaction, 0, 2)
@@ -428,8 +430,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 	// Fail if Shanghai not enabled and len(withdrawals) is non-zero.
 	withdrawals := block.Withdrawals()
-	if len(withdrawals) > 0 && !p.config.IsShanghai(block.Time()) {
-		return nil, nil, nil, 0, fmt.Errorf("withdrawals before shanghai")
+	if len(withdrawals) > 0 && !p.config.IsShanghai(block.Number(), block.Time()) {
+		return nil, nil, nil, 0, errors.New("withdrawals before shanghai")
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
@@ -496,7 +498,7 @@ func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, sta
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
 func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config, receiptProcessors ...ReceiptProcessor) (*types.Receipt, error) {
-	msg, err := TransactionToMessage(tx, types.MakeSigner(config, header.Number), header.BaseFee)
+	msg, err := TransactionToMessage(tx, types.MakeSigner(config, header.Number, header.Time), header.BaseFee)
 	if err != nil {
 		return nil, err
 	}

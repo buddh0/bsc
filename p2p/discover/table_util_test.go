@@ -28,7 +28,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 )
@@ -42,8 +41,9 @@ func init() {
 }
 
 func newTestTable(t transport) (*Table, *enode.DB) {
+	cfg := Config{}
 	db, _ := enode.OpenDB("")
-	tab, _ := newTable(t, db, nil, log.Root(), nil)
+	tab, _ := newTable(t, db, cfg, nil)
 	go tab.loop()
 	return tab, db
 }
@@ -52,6 +52,7 @@ func newTestTable(t transport) (*Table, *enode.DB) {
 func nodeAtDistance(base enode.ID, ld int, ip net.IP) *node {
 	var r enr.Record
 	r.Set(enr.IP(ip))
+	r.Set(enr.UDP(30303))
 	return wrapNode(enode.SignNull(&r, idAtDistance(base, ld)))
 }
 
@@ -174,7 +175,7 @@ func (t *pingRecorder) RequestENR(n *enode.Node) (*enode.Node, error) {
 }
 
 func hasDuplicates(slice []*node) bool {
-	seen := make(map[enode.ID]bool)
+	seen := make(map[enode.ID]bool, len(slice))
 	for i, e := range slice {
 		if e == nil {
 			panic(fmt.Sprintf("nil *Node at %d", i))

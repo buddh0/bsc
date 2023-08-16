@@ -159,13 +159,9 @@ func main() {
 		log.Crit("Failed to render the faucet template", "err", err)
 	}
 	// Load and parse the genesis block requested by the user
-	blob, err := os.ReadFile(*genesisFlag)
+	genesis, err := getGenesis(*genesisFlag, false, false)
 	if err != nil {
 		log.Crit("Failed to read genesis block contents", "genesis", *genesisFlag, "err", err)
-	}
-	genesis := new(core.Genesis)
-	if err = json.Unmarshal(blob, genesis); err != nil {
-		log.Crit("Failed to parse genesis block json", "err", err)
 	}
 	// Convert the bootnodes to internal enode representations
 	var enodes []*enode.Node
@@ -177,7 +173,7 @@ func main() {
 		}
 	}
 	// Load up the account key and decrypt its password
-	blob, err = os.ReadFile(*accPassFlag)
+	blob, err := os.ReadFile(*accPassFlag)
 	if err != nil {
 		log.Crit("Failed to read account password contents", "file", *accPassFlag, "err", err)
 	}
@@ -305,11 +301,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network ui
 		}
 	}
 	// Attach to the client and retrieve and interesting metadatas
-	api, err := stack.Attach()
-	if err != nil {
-		stack.Close()
-		return nil, err
-	}
+	api := stack.Attach()
 	client := ethclient.NewClient(api)
 
 	return &faucet{
@@ -969,4 +961,16 @@ func authNoAuth(url string) (string, string, common.Address, error) {
 		return "", "", common.Address{}, errors.New("No BNB Smart Chain address found to fund")
 	}
 	return address.Hex() + "@noauth", "", address, nil
+}
+
+// getGenesis returns a genesis based on input args
+func getGenesis(genesisFlag string, goerliFlag bool, sepoliaFlag bool) (*core.Genesis, error) {
+	switch {
+	case genesisFlag != "":
+		var genesis core.Genesis
+		err := common.LoadJSON(genesisFlag, &genesis)
+		return &genesis, err
+	default:
+		return nil, errors.New("no genesis flag provided")
+	}
 }

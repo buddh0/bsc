@@ -53,6 +53,8 @@ type testBackend struct {
 	chainFeed           event.Feed
 	finalizedHeaderFeed event.Feed
 	voteFeed            event.Feed
+	pendingBlock        *types.Block
+	pendingReceipts     types.Receipts
 }
 
 func (b *testBackend) ChainConfig() *params.ChainConfig {
@@ -109,7 +111,9 @@ func (b *testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.
 
 func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
 	if number := rawdb.ReadHeaderNumber(b.db, hash); number != nil {
-		return rawdb.ReadReceipts(b.db, hash, *number, params.TestChainConfig), nil
+		if header := rawdb.ReadHeader(b.db, hash, *number); header != nil {
+			return rawdb.ReadReceipts(b.db, hash, *number, header.Time, params.TestChainConfig), nil
+		}
 	}
 	return nil, nil
 }
@@ -120,7 +124,7 @@ func (b *testBackend) GetLogs(ctx context.Context, hash common.Hash, number uint
 }
 
 func (b *testBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
-	return nil, nil
+	return b.pendingBlock, b.pendingReceipts
 }
 
 func (b *testBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
