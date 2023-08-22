@@ -62,13 +62,14 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 		return stateDb.RawDump(opts), nil
 	}
 	var header *types.Header
-	if blockNr == rpc.LatestBlockNumber {
+	switch blockNr {
+	case rpc.LatestBlockNumber:
 		header = api.eth.blockchain.CurrentBlock()
-	} else if blockNr == rpc.FinalizedBlockNumber {
+	case rpc.FinalizedBlockNumber:
 		header = api.eth.blockchain.CurrentFinalBlock()
-	} else if blockNr == rpc.SafeBlockNumber {
+	case rpc.SafeBlockNumber:
 		header = api.eth.blockchain.CurrentSafeBlock()
-	} else {
+	default:
 		block := api.eth.blockchain.GetBlockByNumber(uint64(blockNr))
 		if block == nil {
 			return state.Dump{}, fmt.Errorf("block #%d not found", blockNr)
@@ -146,13 +147,14 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 			}
 		} else {
 			var header *types.Header
-			if number == rpc.LatestBlockNumber {
+			switch number {
+			case rpc.LatestBlockNumber:
 				header = api.eth.blockchain.CurrentBlock()
-			} else if number == rpc.FinalizedBlockNumber {
+			case rpc.FinalizedBlockNumber:
 				header = api.eth.blockchain.CurrentFinalBlock()
-			} else if number == rpc.SafeBlockNumber {
+			case rpc.SafeBlockNumber:
 				header = api.eth.blockchain.CurrentSafeBlock()
-			} else {
+			default:
 				block := api.eth.blockchain.GetBlockByNumber(uint64(number))
 				if block == nil {
 					return state.IteratorDump{}, fmt.Errorf("block #%d not found", number)
@@ -235,7 +237,11 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.Block
 }
 
 func storageRangeAt(st state.Trie, start []byte, maxResult int) (StorageRangeResult, error) {
-	it := trie.NewIterator(st.NodeIterator(start))
+	trieIt, err := st.NodeIterator(start)
+	if err != nil {
+		return StorageRangeResult{}, err
+	}
+	it := trie.NewIterator(trieIt)
 	result := StorageRangeResult{Storage: storageMap{}}
 	for i := 0; i < maxResult && it.Next(); i++ {
 		_, content, _, err := rlp.Split(it.Value)
@@ -326,7 +332,15 @@ func (api *DebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]c
 	if err != nil {
 		return nil, err
 	}
-	diff, _ := trie.NewDifferenceIterator(oldTrie.NodeIterator([]byte{}), newTrie.NodeIterator([]byte{}))
+	oldIt, err := oldTrie.NodeIterator([]byte{})
+	if err != nil {
+		return nil, err
+	}
+	newIt, err := newTrie.NodeIterator([]byte{})
+	if err != nil {
+		return nil, err
+	}
+	diff, _ := trie.NewDifferenceIterator(oldIt, newIt)
 	iter := trie.NewIterator(diff)
 
 	var dirty []common.Address

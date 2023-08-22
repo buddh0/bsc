@@ -168,6 +168,10 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		v := ctx.Uint64(utils.OverrideCancun.Name)
 		cfg.Eth.OverrideCancun = &v
 	}
+	if ctx.IsSet(utils.OverrideVerkle.Name) {
+		v := ctx.Uint64(utils.OverrideVerkle.Name)
+		cfg.Eth.OverrideVerkle = &v
+	}
 	backend, _ := utils.RegisterEthService(stack, &cfg.Eth)
 
 	// Configure log filter RPC API.
@@ -270,6 +274,10 @@ func deprecated(field string) bool {
 	case "ethconfig.Config.EVMInterpreter":
 		return true
 	case "ethconfig.Config.EWASMInterpreter":
+		return true
+	case "ethconfig.Config.TrieCleanCacheJournal":
+		return true
+	case "ethconfig.Config.TrieCleanCacheRejournal":
 		return true
 	default:
 		return false

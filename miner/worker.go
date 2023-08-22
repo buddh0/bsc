@@ -26,11 +26,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/parlia"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/systemcontracts"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -687,25 +688,25 @@ func (w *worker) updateSnapshot(env *environment) {
 	w.snapshotState = env.state.Copy()
 }
 
-func (w *worker) commitTransaction(env *environment, tx *types.Transaction, receiptProcessors ...core.ReceiptProcessor) ([]*types.Log, error) {
+func (w *worker) commitTransaction(env *environment, tx *txpool.Transaction, receiptProcessors ...core.ReceiptProcessor) ([]*types.Log, error) {
 	var (
 		snap = env.state.Snapshot()
 		gp   = env.gasPool.Gas()
 	)
 
-	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig(), receiptProcessors...)
+	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx.Tx, &env.header.GasUsed, *w.chain.GetVMConfig(), receiptProcessors...)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.SetGas(gp)
 		return nil, err
 	}
-	env.txs = append(env.txs, tx)
+	env.txs = append(env.txs, tx.Tx)
 	env.receipts = append(env.receipts, receipt)
 
 	return receipt.Logs, nil
 }
 
-func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByPriceAndNonce,
+func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAndNonce,
 	interruptCh chan int32, stopTimer *time.Timer) error {
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
@@ -729,9 +730,11 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 	defer close(stopPrefetchCh)
 	//prefetch txs from all pending txs
 	txsPrefetch := txs.Copy()
-	tx := txsPrefetch.Peek()
-	txCurr := &tx
-	w.prefetcher.PrefetchMining(txsPrefetch, env.header, env.gasPool.Gas(), env.state.CopyDoPrefetch(), *w.chain.GetVMConfig(), stopPrefetchCh, txCurr)
+	tx := txsPrefetch.PeekWithUnwrap()
+	if tx != nil {
+		txCurr := &tx
+		w.prefetcher.PrefetchMining(txsPrefetch, env.header, env.gasPool.Gas(), env.state.CopyDoPrefetch(), *w.chain.GetVMConfig(), stopPrefetchCh, txCurr)
+	}
 
 	signal := commitInterruptNone
 LOOP:
@@ -770,29 +773,37 @@ LOOP:
 			}
 		}
 		// Retrieve the next transaction and abort if all done
-		tx = txs.Peek()
-		if tx == nil {
+		ltx := txs.Peek()
+		if ltx == nil {
 			break
+		}
+		tx := ltx.Resolve()
+		if tx == nil {
+			log.Warn("Ignoring evicted transaction")
+
+			txs.Pop()
+			continue
 		}
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
-		_, _ = types.Sender(env.signer, tx)
+		from, _ := types.Sender(env.signer, tx.Tx)
 
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
-		if tx.Protected() && !w.chainConfig.IsEIP155(env.header.Number) {
-			//log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", w.chainConfig.EIP155Block)
+		if tx.Tx.Protected() && !w.chainConfig.IsEIP155(env.header.Number) {
+			log.Trace("Ignoring reply protected transaction", "hash", tx.Tx.Hash(), "eip155", w.chainConfig.EIP155Block)
+
 			txs.Pop()
 			continue
 		}
 		// Start executing the transaction
-		env.state.SetTxContext(tx.Hash(), env.tcount)
+		env.state.SetTxContext(tx.Tx.Hash(), env.tcount)
 
 		logs, err := w.commitTransaction(env, tx, bloomProcessors)
 		switch {
 		case errors.Is(err, core.ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
-			//log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
+			log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Tx.Nonce())
 			txs.Shift()
 
 		case errors.Is(err, nil):
@@ -804,7 +815,7 @@ LOOP:
 		default:
 			// Transaction is regarded as invalid, drop all consecutive transactions from
 			// the same sender because of `nonce-too-high` clause.
-			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+			log.Debug("Transaction failed, account skipped", "hash", tx.Tx.Hash(), "err", err)
 			txs.Pop()
 		}
 	}
@@ -883,7 +894,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	}
 	// Set baseFee and GasLimit if we are on an EIP-1559 chain
 	if w.chainConfig.IsLondon(header.Number) {
-		header.BaseFee = misc.CalcBaseFee(w.chainConfig, parent)
+		header.BaseFee = eip1559.CalcBaseFee(w.chainConfig, parent)
 		if !w.chainConfig.IsLondon(parent.Number) {
 			parentGasLimit := parent.GasLimit * w.chainConfig.ElasticityMultiplier()
 			header.GasLimit = core.CalcGasLimit(parentGasLimit, w.config.GasCeil)
@@ -916,7 +927,8 @@ func (w *worker) fillTransactions(interruptCh chan int32, env *environment, stop
 	// Split the pending transactions into locals and remotes
 	// Fill the block with all available pending transactions.
 	pending := w.eth.TxPool().Pending(false)
-	localTxs, remoteTxs := make(map[common.Address]types.Transactions), pending
+
+	localTxs, remoteTxs := make(map[common.Address][]*txpool.LazyTransaction), pending
 	for _, account := range w.eth.TxPool().Locals() {
 		if txs := remoteTxs[account]; len(txs) > 0 {
 			delete(remoteTxs, account)
@@ -926,7 +938,7 @@ func (w *worker) fillTransactions(interruptCh chan int32, env *environment, stop
 
 	err = nil
 	if len(localTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(env.signer, localTxs, env.header.BaseFee)
+		txs := newTransactionsByPriceAndNonce(env.signer, localTxs, env.header.BaseFee)
 		err = w.commitTransactions(env, txs, interruptCh, stopTimer)
 		// we will abort here when:
 		//   1.new block was imported
@@ -939,7 +951,7 @@ func (w *worker) fillTransactions(interruptCh chan int32, env *environment, stop
 		}
 	}
 	if len(remoteTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(env.signer, remoteTxs, env.header.BaseFee)
+		txs := newTransactionsByPriceAndNonce(env.signer, remoteTxs, env.header.BaseFee)
 		err = w.commitTransactions(env, txs, interruptCh, stopTimer)
 	}
 

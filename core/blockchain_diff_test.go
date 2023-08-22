@@ -259,9 +259,6 @@ func newTestBackendWithGenerator(blocks int, lightProcess bool) *testBackend {
 	if _, err := chain.InsertChain(bs); err != nil {
 		panic(err)
 	}
-	if lightProcess {
-		EnableLightProcessor(chain)
-	}
 
 	return &testBackend{
 		db:    db,

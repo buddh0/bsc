@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -561,7 +561,7 @@ func (p *Parlia) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 		if header.BaseFee != nil {
 			return fmt.Errorf("invalid baseFee before fork: have %d, expected 'nil'", header.BaseFee)
 		}
-	} else if err := misc.VerifyEIP1559Header(chain.Config(), parent, header); err != nil {
+	} else if err := eip1559.VerifyEIP1559Header(chain.Config(), parent, header); err != nil {
 		// Verify the header's EIP-1559 attributes.
 		return err
 	}

@@ -174,18 +174,18 @@ func (f *prunedfreezer) AppendAncient(number uint64, hash, header, body, receipt
 }
 
 // TruncateAncients discards any recent data above the provided threshold number, always success.
-func (f *prunedfreezer) TruncateHead(items uint64) error {
-	if atomic.LoadUint64(&f.frozen) <= items {
-		return nil
+func (f *prunedfreezer) TruncateHead(items uint64) (uint64, error) {
+	preHead := atomic.LoadUint64(&f.frozen)
+	if preHead > items {
+		atomic.StoreUint64(&f.frozen, items)
+		WriteFrozenOfAncientFreezer(f.db, atomic.LoadUint64(&f.frozen))
 	}
-	atomic.StoreUint64(&f.frozen, items)
-	WriteFrozenOfAncientFreezer(f.db, atomic.LoadUint64(&f.frozen))
-	return nil
+	return preHead, nil
 }
 
 // TruncateTail discards any recent data below the provided threshold number.
-func (f *prunedfreezer) TruncateTail(tail uint64) error {
-	return errNotSupported
+func (f *prunedfreezer) TruncateTail(tail uint64) (uint64, error) {
+	return 0, errNotSupported
 }
 
 // Sync flushes meta data tables to disk.

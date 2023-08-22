@@ -16,21 +16,21 @@ require (
 	github.com/cockroachdb/pebble v0.0.0-20230209160836-829675f94811
 	github.com/cometbft/cometbft v0.37.0
 	github.com/consensys/gnark-crypto v0.10.0
-	github.com/crate-crypto/go-kzg-4844 v0.2.0
+	github.com/crate-crypto/go-kzg-4844 v0.3.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set/v2 v2.1.0
 	github.com/deepmap/oapi-codegen v1.8.2 // indirect
 	github.com/docker/docker v20.10.19+incompatible
-	github.com/dop251/goja v0.0.0-20230122112309-96b1610dd4f7
+	github.com/dop251/goja v0.0.0-20230605162241-28ee0ee714f3
 	github.com/etcd-io/bbolt v1.3.3 // indirect
-	github.com/ethereum/c-kzg-4844 v0.2.0
+	github.com/ethereum/c-kzg-4844 v0.3.1
 	github.com/fatih/color v1.13.0
 	github.com/fatih/structs v1.1.0
 	github.com/fjl/gencodec v0.0.0-20230517082657-f9840df7b83e
 	github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/gballet/go-libpcsclite v0.0.0-20191108122812-4678299bea08
-	github.com/gballet/go-verkle v0.0.0-20220902153445-097bd83b7732
+	github.com/gballet/go-verkle v0.0.0-20230607174250-df487255f46b
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-stack/stack v1.8.1
 	github.com/gofrs/flock v0.8.1
@@ -44,8 +44,9 @@ require (
 	github.com/graph-gophers/graphql-go v1.3.0
 	github.com/hashicorp/go-bexpr v0.1.10
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
+	github.com/holiman/billy v0.0.0-20230718173358-1c7e68d277a7
 	github.com/holiman/bloomfilter/v2 v2.0.3
-	github.com/holiman/uint256 v1.2.2-0.20230321075855-87b91420868c
+	github.com/holiman/uint256 v1.2.3
 	github.com/huin/goupnp v1.0.3
 	github.com/influxdata/influxdb-client-go/v2 v2.4.0
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
@@ -53,7 +54,7 @@ require (
 	github.com/jedisct1/go-minisign v0.0.0-20190909160543-45766022959e
 	github.com/jmhodges/levigo v1.0.0 // indirect
 	github.com/julienschmidt/httprouter v1.3.0
-	github.com/karalabe/usb v0.0.2
+	github.com/karalabe/usb v0.0.3-0.20230711191512-61db3e06439c
 	github.com/kylelemons/godebug v1.1.0
 	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/mattn/go-colorable v0.1.13
@@ -72,20 +73,21 @@ require (
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/status-im/keycard-go v0.2.0
 	github.com/stretchr/testify v1.8.1
-	github.com/supranational/blst v0.3.11-0.20230406105308-e9dfc5ee724b
+	github.com/supranational/blst v0.3.11
 	github.com/syndtr/goleveldb v1.0.1
 	github.com/tendermint/go-amino v0.14.1
 	github.com/tendermint/iavl v0.12.0
 	github.com/tendermint/tendermint v0.31.15
 	github.com/tidwall/wal v1.1.7
 	github.com/tyler-smith/go-bip39 v1.1.0
-	github.com/urfave/cli/v2 v2.23.7
+	github.com/urfave/cli/v2 v2.24.1
 	github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4 v1.1.3
 	github.com/willf/bitset v1.1.3
+	go.uber.org/automaxprocs v1.5.2
 	golang.org/x/crypto v0.9.0
-	golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc
-	golang.org/x/sync v0.2.0
-	golang.org/x/sys v0.8.0
+	golang.org/x/exp v0.0.0-20230810033253-352e893a4cad
+	golang.org/x/sync v0.3.0
+	golang.org/x/sys v0.9.0
 	golang.org/x/text v0.9.0
 	golang.org/x/time v0.3.0
 	golang.org/x/tools v0.9.1
@@ -121,7 +123,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/cosmos/gogoproto v1.4.1 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
-	github.com/crate-crypto/go-ipa v0.0.0-20220523130400-f11357ae11c7 // indirect
+	github.com/crate-crypto/go-ipa v0.0.0-20230601170251-1830d0757c80 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.1.0 // indirect
 	github.com/dgraph-io/ristretto v0.0.4-0.20210318174700-74754f61e018 // indirect
@@ -264,7 +266,7 @@ require (
 	go.uber.org/fx v1.18.2 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
-	golang.org/x/mod v0.10.0 // indirect
+	golang.org/x/mod v0.11.0 // indirect
 	golang.org/x/net v0.10.0 // indirect
 	golang.org/x/oauth2 v0.3.0 // indirect
 	golang.org/x/term v0.8.0 // indirect

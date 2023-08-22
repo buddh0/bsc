@@ -38,6 +38,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/pruner"
 	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
+	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vote"
@@ -158,7 +160,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	log.Info(strings.Repeat("-", 153))
 	log.Info("")
 
-	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, stack.ResolvePath(config.TrieCleanCacheJournal), config.TriesInMemory); err != nil {
+	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, config.TriesInMemory); err != nil {
 		log.Error("Failed to recover state", "error", err)
 	}
 
@@ -210,22 +212,18 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			EnablePreimageRecording: config.EnablePreimageRecording,
 		}
 		cacheConfig = &core.CacheConfig{
-			TrieCleanLimit:     config.TrieCleanCache,
-			TrieCleanJournal:   stack.ResolvePath(config.TrieCleanCacheJournal),
-			TrieCleanRejournal: config.TrieCleanCacheRejournal,
-			TrieDirtyLimit:     config.TrieDirtyCache,
-			TrieDirtyDisabled:  config.NoPruning,
-			TrieTimeLimit:      config.TrieTimeout,
-			NoTries:            config.TriesVerifyMode != core.LocalVerify,
-			SnapshotLimit:      config.SnapshotCache,
-			TriesInMemory:      config.TriesInMemory,
-			Preimages:          config.Preimages,
+			TrieCleanLimit:      config.TrieCleanCache,
+			TrieCleanNoPrefetch: config.NoPrefetch,
+			TrieDirtyLimit:      config.TrieDirtyCache,
+			TrieDirtyDisabled:   config.NoPruning,
+			TrieTimeLimit:       config.TrieTimeout,
+			NoTries:             config.TriesVerifyMode != core.LocalVerify,
+			SnapshotLimit:       config.SnapshotCache,
+			TriesInMemory:       config.TriesInMemory,
+			Preimages:           config.Preimages,
 		}
 	)
 	bcOps := make([]core.BlockChainOption, 0)
-	if config.DiffSync && !config.PipeCommit && config.TriesVerifyMode == core.LocalVerify {
-		bcOps = append(bcOps, core.EnableLightProcessor)
-	}
 	if config.PipeCommit {
 		bcOps = append(bcOps, core.EnablePipelineCommit)
 	}
@@ -243,17 +241,29 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if config.OverrideCancun != nil {
 		overrides.OverrideCancun = config.OverrideCancun
 	}
+	if config.OverrideVerkle != nil {
+		overrides.OverrideVerkle = config.OverrideVerkle
+	}
 	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, bcOps...)
 	if err != nil {
 		return nil, err
 	}
 	eth.bloomIndexer.Start(eth.blockchain)
 
+	if config.BlobPool.Datadir != "" {
+		config.BlobPool.Datadir = stack.ResolvePath(config.BlobPool.Datadir)
+	}
+	blobPool := blobpool.New(config.BlobPool, eth.blockchain)
+
 	if config.TxPool.Journal != "" {
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
 	}
-	eth.txPool = txpool.New(config.TxPool, eth.blockchain.Config(), eth.blockchain)
+	legacyPool := legacypool.New(config.TxPool, eth.blockchain)
 
+	eth.txPool, err = txpool.New(new(big.Int).SetUint64(config.TxPool.PriceLimit), eth.blockchain, []txpool.SubPool{legacyPool, blobPool})
+	if err != nil {
+		return nil, err
+	}
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
 	if eth.handler, err = newHandler(&handlerConfig{
@@ -625,7 +635,7 @@ func (s *Ethereum) Stop() error {
 	// Then stop everything else.
 	s.bloomIndexer.Close()
 	close(s.closeBloomHandler)
-	s.txPool.Stop()
+	s.txPool.Close()
 	s.miner.Close()
 	s.blockchain.Stop()
 	s.engine.Close()

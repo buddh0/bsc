@@ -997,28 +997,26 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 			recentTx -= blockSafetyMargin - txIndexRecentOffset
 		}
 	}
-	if server.config.UltraLightOnlyAnnounce {
-		recentTx = txIndexDisabled
-	}
+	// if recentTx != txIndexUnlimited && p.version < lpv4 {
+	// 	return errors.New("Cannot serve old clients without a complete tx index")
+	// }
 	// Note: clientPeer.headInfo should contain the last head announced to the client by us.
 	// The values announced in the handshake are dummy values for compatibility reasons and should be ignored.
 	p.headInfo = blockInfo{Hash: head, Number: headNum, Td: td}
 	return p.handshake(td, head, headNum, genesis, forkID, forkFilter, func(lists *keyValueList) {
 		// Add some information which services server can offer.
-		if !server.config.UltraLightOnlyAnnounce {
-			*lists = (*lists).add("serveHeaders", nil)
-			*lists = (*lists).add("serveChainSince", uint64(0))
-			*lists = (*lists).add("serveStateSince", uint64(0))
+		*lists = (*lists).add("serveHeaders", nil)
+		*lists = (*lists).add("serveChainSince", uint64(0))
+		*lists = (*lists).add("serveStateSince", uint64(0))
 
-			// If local ethereum node is running in archive mode, advertise ourselves we have
-			// all version state data. Otherwise only recent state is available.
-			stateRecent := server.handler.blockchain.TriesInMemory() - blockSafetyMargin
-			if server.archiveMode {
-				stateRecent = 0
-			}
-			*lists = (*lists).add("serveRecentState", stateRecent)
-			*lists = (*lists).add("txRelay", nil)
+		// If local ethereum node is running in archive mode, advertise ourselves we have
+		// all version state data. Otherwise only recent state is available.
+		stateRecent := server.handler.blockchain.TriesInMemory() - blockSafetyMargin
+		if server.archiveMode {
+			stateRecent = 0
 		}
+		*lists = (*lists).add("serveRecentState", stateRecent)
+		*lists = (*lists).add("txRelay", nil)
 		if p.version >= lpv4 {
 			*lists = (*lists).add("recentTxLookup", recentTx)
 		}

@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"go.uber.org/automaxprocs/maxprocs"
 
 	// Force-load the tracer engines to trigger registration
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
@@ -72,6 +73,7 @@ var (
 		utils.USBFlag,
 		utils.SmartCardDaemonPathFlag,
 		utils.OverrideCancun,
+		utils.OverrideVerkle,
 		utils.EnablePersonal,
 		utils.TxPoolLocalsFlag,
 		utils.TxPoolNoLocalsFlag,
@@ -85,6 +87,9 @@ var (
 		utils.TxPoolGlobalQueueFlag,
 		utils.TxPoolLifetimeFlag,
 		utils.TxPoolReannounceTimeFlag,
+		utils.BlobPoolDataDirFlag,
+		utils.BlobPoolDataCapFlag,
+		utils.BlobPoolPriceBumpFlag,
 		utils.SyncModeFlag,
 		utils.TriesVerifyModeFlag,
 		utils.SyncTargetFlag,
@@ -98,9 +103,6 @@ var (
 		utils.LightMaxPeersFlag,
 		utils.LightNoPruneFlag,
 		utils.LightKDFFlag,
-		utils.UltraLightServersFlag,
-		utils.UltraLightFractionFlag,
-		utils.UltraLightOnlyAnnounceFlag,
 		utils.LightNoSyncServeFlag,
 		utils.EthRequiredBlocksFlag,
 		utils.LegacyWhitelistFlag,
@@ -135,14 +137,16 @@ var (
 		utils.MinerNewPayloadTimeout,
 		utils.NATFlag,
 		utils.NoDiscoverFlag,
+		utils.DiscoveryV4Flag,
 		utils.DiscoveryV5Flag,
+		utils.LegacyDiscoveryV5Flag,
 		utils.NetrestrictFlag,
 		utils.NodeKeyFileFlag,
 		utils.NodeKeyHexFlag,
 		utils.DNSDiscoveryFlag,
 		utils.DeveloperFlag,
-		utils.DeveloperPeriodFlag,
 		utils.DeveloperGasLimitFlag,
+		utils.DeveloperPeriodFlag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
 		utils.EthStatsURLFlag,
@@ -263,6 +267,7 @@ func init() {
 	)
 
 	app.Before = func(ctx *cli.Context) error {
+		maxprocs.Set() // Automatically set GOMAXPROCS to match Linux container CPU quota.
 		flags.MigrateGlobalFlags(ctx)
 		return debug.Setup(ctx)
 	}
@@ -417,7 +422,7 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend, isCon
 	}
 
 	// Start auxiliary services if enabled
-	if ctx.Bool(utils.MiningEnabledFlag.Name) || ctx.Bool(utils.DeveloperFlag.Name) {
+	if ctx.Bool(utils.MiningEnabledFlag.Name) {
 		// Mining only makes sense if a full Ethereum node is running
 		if ctx.String(utils.SyncModeFlag.Name) == "light" {
 			utils.Fatalf("Light clients do not support mining")

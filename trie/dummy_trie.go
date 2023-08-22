@@ -51,6 +51,11 @@ func (t *EmptyTrie) UpdateStorage(_ common.Address, key, value []byte) error {
 func (t *EmptyTrie) UpdateAccount(address common.Address, account *types.StateAccount) error {
 	return nil
 }
+
+func (t *EmptyTrie) UpdateContractCode(_ common.Address, _ common.Hash, _ []byte) error {
+	return nil
+}
+
 func (t *EmptyTrie) DeleteStorage(_ common.Address, key []byte) error {
 	return nil
 }
@@ -59,8 +64,8 @@ func (t *EmptyTrie) DeleteAccount(address common.Address) error {
 	return nil
 }
 
-func (t *EmptyTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
-	return common.Hash{}, nil
+func (t *EmptyTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) {
+	return common.Hash{}, nil, nil
 }
 
 func (t *EmptyTrie) Hash() common.Hash {
@@ -69,11 +74,11 @@ func (t *EmptyTrie) Hash() common.Hash {
 
 // NodeIterator returns an iterator that returns nodes of the underlying trie. Iteration
 // starts at the key after the given start key.
-func (t *EmptyTrie) NodeIterator(start []byte) NodeIterator {
-	return nil
+func (t *EmptyTrie) NodeIterator(startKey []byte) (NodeIterator, error) {
+	return nil, nil
 }
 
-func (t *EmptyTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error {
+func (t *EmptyTrie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 	return nil
 }
 

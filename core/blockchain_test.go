@@ -233,7 +233,7 @@ func testBlockChainImport(chain types.Blocks, pipelineCommit bool, blockchain *B
 		rawdb.WriteBlock(blockchain.db, block)
 		statedb.Finalise(false)
 		statedb.AccountsIntermediateRoot()
-		statedb.Commit(nil)
+		statedb.Commit(block.NumberU64(), nil)
 		blockchain.chainmu.Unlock()
 	}
 	return nil
@@ -4254,6 +4254,7 @@ func testCreateThenDelete(t *testing.T, config *params.ChainConfig) {
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
+	defer chain.Stop()
 	// Import the blocks
 	for _, block := range blocks {
 		if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
@@ -4340,6 +4341,7 @@ func TestTransientStorageReset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
+	defer chain.Stop()
 	// Import the blocks
 	if _, err := chain.InsertChain(blocks); err != nil {
 		t.Fatalf("failed to insert into chain: %v", err)
@@ -4434,6 +4436,7 @@ func TestEIP3651(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
+	defer chain.Stop()
 	if n, err := chain.InsertChain(blocks); err != nil {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}

@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/monitor"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/fetcher"
@@ -43,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -57,6 +59,11 @@ const (
 
 	// deltaTdThreshold is the threshold of TD difference for peers to broadcast votes.
 	deltaTdThreshold = 20
+
+	// txMaxBroadcastSize is the max size of a transaction that will be broadcasted.
+	// All transactions with a higher size will be announced and need to be fetched
+	// by the peer.
+	txMaxBroadcastSize = 4096
 )
 
 var (
@@ -72,14 +79,14 @@ type txPool interface {
 
 	// Get retrieves the transaction from local txpool with given
 	// tx hash.
-	Get(hash common.Hash) *types.Transaction
+	Get(hash common.Hash) *txpool.Transaction
 
-	// AddRemotes should add the given transactions to the pool.
-	AddRemotes([]*types.Transaction) []error
+	// Add should add the given transactions to the pool.
+	Add(txs []*txpool.Transaction, local bool, sync bool) []error
 
 	// Pending should return pending transactions.
 	// The slice should be modifiable by the caller.
-	Pending(enforceTips bool) map[common.Address]types.Transactions
+	Pending(enforceTips bool) map[common.Address][]*txpool.LazyTransaction
 
 	// SubscribeNewTxsEvent should return an event subscription of
 	// NewTxsEvent and send events to the given channel.
@@ -163,7 +170,9 @@ type handler struct {
 
 	chainSync *chainSyncer
 	wg        sync.WaitGroup
-	peerWG    sync.WaitGroup
+
+	handlerStartCh chan struct{}
+	handlerDoneCh  chan struct{}
 }
 
 // newHandler returns a handler for all Ethereum chain management protocol.
@@ -191,6 +200,8 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		directBroadcast:        config.DirectBroadcast,
 		diffSync:               config.DiffSync,
 		quitSync:               make(chan struct{}),
+		handlerDoneCh:          make(chan struct{}),
+		handlerStartCh:         make(chan struct{}),
 	}
 	if config.Sync == downloader.FullSync {
 		// The database seems empty as the current block is the genesis. Yet the snap
@@ -326,14 +337,58 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		return p.RequestTxs(hashes)
 	}
-	h.txFetcher = fetcher.NewTxFetcher(h.txpool.Has, h.txpool.AddRemotes, fetchTx)
+	addTxs := func(txs []*txpool.Transaction) []error {
+		return h.txpool.Add(txs, false, false)
+	}
+	h.txFetcher = fetcher.NewTxFetcher(h.txpool.Has, addTxs, fetchTx)
 	h.chainSync = newChainSyncer(h)
 	return h, nil
+}
+
+// protoTracker tracks the number of active protocol handlers.
+func (h *handler) protoTracker() {
+	defer h.wg.Done()
+	var active int
+	for {
+		select {
+		case <-h.handlerStartCh:
+			active++
+		case <-h.handlerDoneCh:
+			active--
+		case <-h.quitSync:
+			// Wait for all active handlers to finish.
+			for ; active > 0; active-- {
+				<-h.handlerDoneCh
+			}
+			return
+		}
+	}
+}
+
+// incHandlers signals to increment the number of active handlers if not
+// quitting.
+func (h *handler) incHandlers() bool {
+	select {
+	case h.handlerStartCh <- struct{}{}:
+		return true
+	case <-h.quitSync:
+		return false
+	}
+}
+
+// decHandlers signals to decrement the number of active handlers.
+func (h *handler) decHandlers() {
+	h.handlerDoneCh <- struct{}{}
 }
 
 // runEthPeer registers an eth peer into the joint eth/snap peerset, adds it to
 // various subsystems and starts handling messages.
 func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
+	if !h.incHandlers() {
+		return p2p.DiscQuitting
+	}
+	defer h.decHandlers()
+
 	// If the peer has a `snap` extension, wait for it to connect so we can have
 	// a uniform initialization/teardown mechanism
 	snap, err := h.peers.waitSnapExtension(peer)
@@ -356,12 +411,6 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		peer.Log().Error("Bsc extension barrier failed", "err", err)
 		return err
 	}
-	// TODO(karalabe): Not sure why this is needed
-	if !h.chainSync.handlePeerEvent(peer) {
-		return p2p.DiscQuitting
-	}
-	h.peerWG.Add(1)
-	defer h.peerWG.Done()
 
 	// Execute the Ethereum handshake
 	var (
@@ -436,7 +485,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 			return err
 		}
 	}
-	h.chainSync.handlePeerEvent(peer)
+	h.chainSync.handlePeerEvent()
 
 	// Propagate existing transactions and votes. new transactions and votes appearing
 	// after this will be sent via broadcasts.
@@ -500,10 +549,19 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 // `eth`, all subsystem registrations and lifecycle management will be done by
 // the main `eth` handler to prevent strange races.
 func (h *handler) runSnapExtension(peer *snap.Peer, handler snap.Handler) error {
-	h.peerWG.Add(1)
-	defer h.peerWG.Done()
+	if !h.incHandlers() {
+		return p2p.DiscQuitting
+	}
+	defer h.decHandlers()
 
 	if err := h.peers.registerSnapExtension(peer); err != nil {
+		if metrics.Enabled {
+			if peer.Inbound() {
+				snap.IngressRegistrationErrorMeter.Mark(1)
+			} else {
+				snap.EgressRegistrationErrorMeter.Mark(1)
+			}
+		}
 		peer.Log().Warn("Snapshot extension registration failed", "err", err)
 		return err
 	}
@@ -515,10 +573,18 @@ func (h *handler) runSnapExtension(peer *snap.Peer, handler snap.Handler) error 
 // `eth`, all subsystem registrations and lifecycle management will be done by
 // the main `eth` handler to prevent strange races.
 func (h *handler) runDiffExtension(peer *diff.Peer, handler diff.Handler) error {
-	h.peerWG.Add(1)
-	defer h.peerWG.Done()
+	if !h.incHandlers() {
+		return p2p.DiscQuitting
+	}
 
 	if err := h.peers.registerDiffExtension(peer); err != nil {
+		if metrics.Enabled {
+			if peer.Inbound() {
+				diff.IngressRegistrationErrorMeter.Mark(1)
+			} else {
+				diff.EgressRegistrationErrorMeter.Mark(1)
+			}
+		}
 		peer.Log().Error("Diff extension registration failed", "err", err)
 		peer.Close()
 		return err
@@ -531,10 +597,18 @@ func (h *handler) runDiffExtension(peer *diff.Peer, handler diff.Handler) error 
 // `eth`, all subsystem registrations and lifecycle management will be done by
 // the main `eth` handler to prevent strange races.
 func (h *handler) runTrustExtension(peer *trust.Peer, handler trust.Handler) error {
-	h.peerWG.Add(1)
-	defer h.peerWG.Done()
+	if !h.incHandlers() {
+		return p2p.DiscQuitting
+	}
 
 	if err := h.peers.registerTrustExtension(peer); err != nil {
+		if metrics.Enabled {
+			if peer.Inbound() {
+				trust.IngressRegistrationErrorMeter.Mark(1)
+			} else {
+				trust.EgressRegistrationErrorMeter.Mark(1)
+			}
+		}
 		peer.Log().Error("Trust extension registration failed", "err", err)
 		return err
 	}
@@ -546,10 +620,18 @@ func (h *handler) runTrustExtension(peer *trust.Peer, handler trust.Handler) err
 // `eth`, all subsystem registrations and lifecycle management will be done by
 // the main `eth` handler to prevent strange races.
 func (h *handler) runBscExtension(peer *bsc.Peer, handler bsc.Handler) error {
-	h.peerWG.Add(1)
-	defer h.peerWG.Done()
+	if !h.incHandlers() {
+		return p2p.DiscQuitting
+	}
 
 	if err := h.peers.registerBscExtension(peer); err != nil {
+		if metrics.Enabled {
+			if peer.Inbound() {
+				bsc.IngressRegistrationErrorMeter.Mark(1)
+			} else {
+				bsc.EgressRegistrationErrorMeter.Mark(1)
+			}
+		}
 		peer.Log().Error("Bsc extension registration failed", "err", err)
 		return err
 	}
@@ -653,6 +735,10 @@ func (h *handler) Start(maxPeers int, maxPeersPerIP int) {
 	// start sync handlers
 	h.wg.Add(1)
 	go h.chainSync.loop()
+
+	// start peer handler tracker
+	h.wg.Add(1)
+	go h.protoTracker()
 }
 
 func (h *handler) startMaliciousVoteMonitor() {
@@ -684,14 +770,13 @@ func (h *handler) Stop() {
 	// Quit chainSync and txsync64.
 	// After this is done, no new peers will be accepted.
 	close(h.quitSync)
-	h.wg.Wait()
 
 	// Disconnect existing sessions.
 	// This also closes the gate for any new registrations on the peer set.
 	// sessions which are already established but not added to h.peers yet
 	// will exit when they try to register.
 	h.peers.close()
-	h.peerWG.Wait()
+	h.wg.Wait()
 
 	log.Info("Ethereum protocol stopped")
 }
@@ -769,8 +854,12 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 	// Broadcast transactions to a batch of peers not knowing about it
 	for _, tx := range txs {
 		peers := h.peers.peersWithoutTransaction(tx.Hash())
+
+		var numDirect int
+		if tx.Size() <= txMaxBroadcastSize {
+			numDirect = int(math.Sqrt(float64(len(peers))))
+		}
 		// Send the tx unconditionally to a subset of our peers
-		numDirect := int(math.Sqrt(float64(len(peers))))
 		for _, peer := range peers[:numDirect] {
 			txset[peer] = append(txset[peer], tx.Hash())
 		}
