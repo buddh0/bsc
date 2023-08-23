@@ -226,7 +226,7 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 			return fmt.Errorf("%w: balance %v, queued cost %v, tx cost %v, overshot %v", core.ErrInsufficientFunds, balance, spent, cost, new(big.Int).Sub(need, balance))
 		}
 		// Transaction takes a new nonce value out of the pool. Ensure it doesn't
-		// overflow the number of permitted transactions from a single accoun
+		// overflow the number of permitted transactions from a single account
 		// (i.e. max cancellable via out-of-bound transaction).
 		if used, left := opts.UsedAndLeftSlots(from); left <= 0 {
 			return fmt.Errorf("%w: pooled %d txs", ErrAccountLimitExceeded, used)

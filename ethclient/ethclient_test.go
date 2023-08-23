@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -372,9 +373,6 @@ func TestEthClient(t *testing.T) {
 		"CallContract": {
 			func(t *testing.T) { testCallContract(t, client) },
 		},
-		"TestDiffAccounts": {
-			func(t *testing.T) { testDiffAccounts(t, client) },
-		},
 		"CallContractAtHash": {
 			func(t *testing.T) { testCallContractAtHash(t, client) },
 		},
@@ -685,47 +683,6 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 	// PendingCallContract
 	if _, err := ec.PendingCallContract(context.Background(), msg); err != nil {
 		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func testDiffAccounts(t *testing.T, client *rpc.Client) {
-	ec := NewClient(client)
-	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-	defer cancel()
-
-	for _, testBlock := range testBlocks {
-		if testBlock.blockNr == 10 {
-			continue
-		}
-		diffAccounts, err := ec.GetDiffAccounts(ctx, big.NewInt(int64(testBlock.blockNr)))
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		accounts := make([]common.Address, 0)
-		for _, tx := range testBlock.txs {
-			// tx.to should be in the accounts list.
-			for idx, account := range diffAccounts {
-				if tx.to == account {
-					break
-				}
-
-				if idx == len(diffAccounts)-1 {
-					t.Fatalf("address(%v) expected in the diff account list, but not", tx.to)
-				}
-			}
-
-			accounts = append(accounts, tx.to)
-		}
-
-		diffDetail, err := ec.GetDiffAccountsWithScope(ctx, big.NewInt(int64(testBlock.blockNr)), accounts)
-		if err != nil {
-			t.Fatalf("get diff accounts in block error: %v", err)
-		}
-		// No contract deposit tx, so expect empty transactions.
-		if len(diffDetail.Transactions) != 0 {
-			t.Fatalf("expect ignore all transactions, but some transaction has recorded")
-		}
 	}
 }
 

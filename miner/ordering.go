@@ -144,7 +144,7 @@ func (t *transactionsByPriceAndNonce) Peek() *txpool.LazyTransaction {
 
 // Peek returns the next transaction by price.
 func (t *transactionsByPriceAndNonce) PeekWithUnwrap() *types.Transaction {
-	if len(t.heads) > 0 && t.heads[0].tx != nil && t.heads[0].tx.Tx != nil && t.heads[0].tx.Tx.Tx != nil {
+	if len(t.heads) > 0 && t.heads[0].tx != nil && t.heads[0].tx.Resolve() != nil {
 		return t.heads[0].tx.Tx.Tx
 	}
 	return nil
@@ -184,7 +184,7 @@ func (t *transactionsByPriceAndNonce) Forward(tx *types.Transaction) {
 	}
 	//check whether target tx exists in t.heads
 	for _, head := range t.heads {
-		if head.tx != nil && head.tx.Tx != nil && head.tx.Tx.Tx != nil {
+		if head.tx != nil && head.tx.Resolve() != nil {
 			if tx == head.tx.Tx.Tx {
 				//shift t to the position one after tx
 				txTmp := t.PeekWithUnwrap()
@@ -202,7 +202,7 @@ func (t *transactionsByPriceAndNonce) Forward(tx *types.Transaction) {
 	//check whether target tx exists in t.txs
 	if txs, ok := t.txs[acc]; ok {
 		for _, txLazyTmp := range txs {
-			if txLazyTmp != nil && txLazyTmp.Tx != nil && txLazyTmp.Tx.Tx != nil {
+			if txLazyTmp != nil && txLazyTmp.Resolve() != nil {
 				//found the same pointer in t.txs as tx and then shift t to the position one after tx
 				if tx == txLazyTmp.Tx.Tx {
 					txTmp := t.PeekWithUnwrap()

@@ -280,7 +280,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	// Commit block
 	statedb.Finalise(config.IsEIP158(block.Number()))
 	statedb.AccountsIntermediateRoot()
-	statedb.Commit(block.Number().Uint64(), nil)
+	statedb.Commit(block.NumberU64(), nil)
 	// Add 0-value mining reward. This only makes a difference in the cases
 	// where
 	// - the coinbase self-destructed, or

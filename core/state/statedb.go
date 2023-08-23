@@ -374,15 +374,6 @@ func (s *StateDB) Trie() (Trie, error) {
 	return s.trie, nil
 }
 
-func (s *StateDB) SetDiff(diffLayer *types.DiffLayer, diffTries map[common.Address]Trie, diffCode map[common.Hash][]byte) {
-	s.diffLayer, s.diffTries, s.diffCode = diffLayer, diffTries, diffCode
-}
-
-func (s *StateDB) SetSnapData(stateObjectsDestruct map[common.Address]*types.StateAccount, accounts map[common.Hash][]byte,
-	storages map[common.Hash]map[common.Hash][]byte) {
-	s.stateObjectsDestruct, s.accounts, s.storages = stateObjectsDestruct, accounts, storages
-}
-
 func (s *StateDB) AddLog(log *types.Log) {
 	s.journal.append(addLogChange{txhash: s.thash})
 

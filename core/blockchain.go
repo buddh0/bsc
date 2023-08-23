@@ -1147,42 +1147,6 @@ func (bc *BlockChain) GetDiffLayerRLP(blockHash common.Hash) rlp.RawValue {
 	return rawData
 }
 
-func (bc *BlockChain) GetDiffAccounts(blockHash common.Hash) ([]common.Hash, error) {
-	var (
-		accounts  []common.Hash
-		diffLayer *types.DiffLayer
-	)
-
-	header := bc.GetHeaderByHash(blockHash)
-	if header == nil {
-		return nil, fmt.Errorf("no block found")
-	}
-
-	if cached, ok := bc.diffLayerCache.Get(blockHash); ok {
-		diffLayer = cached.(*types.DiffLayer)
-	} else if diffStore := bc.db.DiffStore(); diffStore != nil {
-		diffLayer = rawdb.ReadDiffLayer(diffStore, blockHash)
-	}
-
-	if diffLayer == nil {
-		if header.TxHash != types.EmptyRootHash {
-			return nil, ErrDiffLayerNotFound
-		}
-
-		return nil, nil
-	}
-
-	for _, diffAccounts := range diffLayer.Accounts {
-		accounts = append(accounts, diffAccounts.Account)
-	}
-
-	if header.TxHash != types.EmptyRootHash && len(accounts) == 0 {
-		return nil, fmt.Errorf("no diff account in block, maybe bad diff layer")
-	}
-
-	return accounts, nil
-}
-
 // stopWithoutSaving stops the blockchain service. If any imports are currently in progress
 // it will abort them using the procInterrupt. This method stops all running
 // goroutines, but does not do all the post-stop work of persisting data.
