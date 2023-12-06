@@ -22,11 +22,17 @@ function init_validator() {
 }
 
 function generate_genesis() {
+     cd ${workspace}/genesis/scripts/
      node generate-validator.js
      INIT_HOLDER_ADDRESSES=$(ls ${workspace}/init-holders | tr '\n' ',')
      INIT_HOLDER_ADDRESSES=${INIT_HOLDER_ADDRESSES/%,/}
      node generate-initHolders.js --initHolders ${INIT_HOLDER_ADDRESSES}
-     node generate-genesis.js --chainid ${BSC_CHAIN_ID}
+
+     cd ${workspace}/genesis
+     source /root/.profile
+     foundryup
+     forge install --no-git --no-commit foundry-rs/forge-std@v1.1.1
+     bash scripts/generate.sh local
 }
 
 function init_genesis_data() {
@@ -43,8 +49,8 @@ function init_genesis_data() {
 
 function prepareBLSWallet(){
      node_id=$1
-     echo "123456" > ${workspace}/storage/${node_id}/blspassword.txt
-     expect ${workspace}/scripts/create_bls_key.sh ${workspace}/storage/${node_id}
+     echo "1234567890" > ${workspace}/storage/${node_id}/blspassword.txt
+     geth bls account new --datadir ${workspace}/storage/${node_id} --blspassword ${workspace}/storage/${node_id}/blspassword.txt
 
      sed -i -e 's/DataDir/BLSPasswordFile = \"{{BLSPasswordFile}}\"\nBLSWalletDir = \"{{BLSWalletDir}}\"\nDataDir/g' ${workspace}/storage/${node_id}/config.toml
      PassWordPath="/root/.ethereum/blspassword.txt"
