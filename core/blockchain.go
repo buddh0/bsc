@@ -2123,7 +2123,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 
 		var snapDiffItems, snapBufItems common.StorageSize
 		if bc.snaps != nil {
-			snapDiffItems, snapBufItems = bc.snaps.Size()
+			snapDiffItems, snapBufItems, _ = bc.snaps.Size()
 		}
 		trieDiffNodes, trieBufNodes, trieImmutableBufNodes, _ := bc.triedb.Size()
 		stats.report(chain, it.index, snapDiffItems, snapBufItems, trieDiffNodes, trieBufNodes, trieImmutableBufNodes, setHead)

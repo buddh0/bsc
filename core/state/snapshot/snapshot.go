@@ -888,7 +888,7 @@ func (t *Tree) DiskRoot() common.Hash {
 // special diff layer (the first) as an aggregator simulating a dirty buffer, so
 // the second return will always be 0. However, this will be made consistent with
 // the pathdb, which will require a second return.
-func (t *Tree) Size() (diffs common.StorageSize, buf common.StorageSize) {
+func (t *Tree) Size() (diffs common.StorageSize, buf common.StorageSize, preimages common.StorageSize) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
@@ -898,5 +898,5 @@ func (t *Tree) Size() (diffs common.StorageSize, buf common.StorageSize) {
 			size += common.StorageSize(layer.memory)
 		}
 	}
-	return size, 0
+	return size, 0, 0
 }
