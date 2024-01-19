@@ -641,6 +641,9 @@ func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, n
 
 // Size returns the current storage size of the memory cache in front of the
 // persistent database layer.
+//
+// The first return will always be 0, representing the memory stored in unbounded
+// diff layers above the dirty cache. This is only available in pathdb.
 func (db *Database) Size() (common.StorageSize, common.StorageSize, common.StorageSize) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()

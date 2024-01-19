@@ -115,6 +115,7 @@ type stTransaction struct {
 	GasLimit             []uint64            `json:"gasLimit"`
 	Value                []string            `json:"value"`
 	PrivateKey           []byte              `json:"secretKey"`
+	Sender               *common.Address     `json:"sender"`
 	BlobVersionedHashes  []common.Hash       `json:"blobVersionedHashes,omitempty"`
 	BlobGasFeeCap        *big.Int            `json:"maxFeePerBlobGas,omitempty"`
 }
@@ -339,7 +340,7 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter boo
 			NoBuild:    false,
 			AsyncBuild: false,
 		}
-		snaps, _ = snapshot.New(snapconfig, db, sdb.TrieDB(), root, 128, false)
+		snaps, _ = snapshot.New(snapconfig, db, triedb, root, 128, false)
 	}
 	statedb, _ = state.New(root, sdb, snaps)
 	return triedb, snaps, statedb
@@ -364,9 +365,12 @@ func (t *StateTest) genesis(config *params.ChainConfig) *core.Genesis {
 }
 
 func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Message, error) {
-	// Derive sender from private key if present.
 	var from common.Address
-	if len(tx.PrivateKey) > 0 {
+	// If 'sender' field is present, use that
+	if tx.Sender != nil {
+		from = *tx.Sender
+	} else if len(tx.PrivateKey) > 0 {
+		// Derive sender from private key if needed.
 		key, err := crypto.ToECDSA(tx.PrivateKey)
 		if err != nil {
 			return nil, fmt.Errorf("invalid private key: %v", err)

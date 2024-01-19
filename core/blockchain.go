@@ -71,6 +71,8 @@ var (
 	justifiedBlockGauge = metrics.NewRegisteredGauge("chain/head/justified", nil)
 	finalizedBlockGauge = metrics.NewRegisteredGauge("chain/head/finalized", nil)
 
+	chainInfoGauge = metrics.NewRegisteredGaugeInfo("chain/info", nil)
+
 	accountReadTimer   = metrics.NewRegisteredTimer("chain/account/reads", nil)
 	accountHashTimer   = metrics.NewRegisteredTimer("chain/account/hashes", nil)
 	accountUpdateTimer = metrics.NewRegisteredTimer("chain/account/updates", nil)
@@ -385,6 +387,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	bc.highestVerifiedHeader.Store(nil)
 	bc.currentBlock.Store(nil)
 	bc.currentSnapBlock.Store(nil)
+
+	// Update chain info data metrics
+	chainInfoGauge.Update(metrics.GaugeInfoValue{"chain_id": bc.chainConfig.ChainID.String()})
 
 	// If Geth is initialized with an external ancient store, re-initialize the
 	// missing chain indexes and chain flags. This procedure can survive crash
@@ -797,6 +802,28 @@ func (bc *BlockChain) tryRewindBadBlocks() {
 	}
 }
 
+// resetState resets the persistent state to genesis state if it's not present.
+func (bc *BlockChain) resetState() {
+	// Short circuit if the genesis state is already present.
+	root := bc.genesisBlock.Root()
+	if bc.HasState(root) {
+		return
+	}
+	// Reset the state database to empty for committing genesis state.
+	// Note, it should only happen in path-based scheme and Reset function
+	// is also only call-able in this mode.
+	if bc.triedb.Scheme() == rawdb.PathScheme {
+		if err := bc.triedb.Reset(types.EmptyRootHash); err != nil {
+			log.Crit("Failed to clean state", "err", err) // Shouldn't happen
+		}
+	}
+	// Write genesis state into database.
+	if err := CommitGenesisState(bc.db, bc.triedb, bc.genesisBlock.Hash()); err != nil {
+		log.Crit("Failed to commit genesis state", "err", err)
+	}
+	log.Info("Reset state to genesis", "root", root)
+}
+
 // setHeadBeyondRoot rewinds the local chain to a new head with the extra condition
 // that the rewind must pass the specified state root. This method is meant to be
 // used when rewinding with snapshots enabled to ensure that we go back further than
@@ -823,26 +850,6 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	pivot := rawdb.ReadLastPivotNumber(bc.db)
 	frozen, _ := bc.db.Ancients()
 
-	// resetState resets the persistent state to genesis if it's not available.
-	resetState := func() {
-		log.Info("Reset to block with genesis state", "number", bc.genesisBlock.NumberU64(), "hash", bc.genesisBlock.Hash())
-		// Short circuit if the genesis state is already present.
-		if bc.HasState(bc.genesisBlock.Root()) {
-			return
-		}
-		// Reset the state database to empty for committing genesis state.
-		// Note, it should only happen in path-based scheme and Reset function
-		// is also only call-able in this mode.
-		if bc.triedb.Scheme() == rawdb.PathScheme {
-			if err := bc.triedb.Reset(types.EmptyRootHash); err != nil {
-				log.Crit("Failed to clean state", "err", err) // Shouldn't happen
-			}
-		}
-		// Write genesis state into database.
-		if err := CommitGenesisState(bc.db, bc.triedb, bc.genesisBlock.Hash()); err != nil {
-			log.Crit("Failed to commit genesis state", "err", err)
-		}
-	}
 	updateFn := func(db ethdb.KeyValueWriter, header *types.Header) (*types.Header, bool) {
 		// Rewind the blockchain, ensuring we don't end up with a stateless head
 		// block. Note, depth equality is permitted to allow using SetHead as a
@@ -852,7 +859,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 			if newHeadBlock == nil {
 				log.Error("Gap in the chain, rewinding to genesis", "number", header.Number, "hash", header.Hash())
 				newHeadBlock = bc.genesisBlock
-				resetState()
+				bc.resetState()
 			} else {
 				// Block exists, keep rewinding until we find one with state,
 				// keeping rewinding until we exceed the optional threshold
@@ -881,7 +888,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 					}
 					if beyondRoot || newHeadBlock.NumberU64() == 0 {
 						if newHeadBlock.NumberU64() == 0 {
-							resetState()
+							bc.resetState()
 						} else if !bc.HasState(newHeadBlock.Root()) {
 							// Rewind to a block with recoverable state. If the state is
 							// missing, run the state recovery here.
@@ -1203,14 +1210,6 @@ func (bc *BlockChain) Stop() {
 					}
 				}
 			}
-			if snapBase != (common.Hash{}) {
-				log.Info("Writing snapshot state to disk", "root", snapBase)
-				if err := triedb.Commit(snapBase, true); err != nil {
-					log.Error("Failed to commit recent state trie", "err", err)
-				} else {
-					rawdb.WriteSafePointBlockNumber(bc.db, bc.CurrentBlock().Number.Uint64())
-				}
-			}
 
 			if snapBase != (common.Hash{}) {
 				log.Info("Writing snapshot state to disk", "root", snapBase)
@@ -1287,19 +1286,30 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		ancientReceipts, liveReceipts []types.Receipts
 	)
 	// Do a sanity check that the provided chain is actually ordered and linked
-	for i := 0; i < len(blockChain); i++ {
+	for i, block := range blockChain {
 		if i != 0 {
-			if blockChain[i].NumberU64() != blockChain[i-1].NumberU64()+1 || blockChain[i].ParentHash() != blockChain[i-1].Hash() {
-				log.Error("Non contiguous receipt insert", "number", blockChain[i].Number(), "hash", blockChain[i].Hash(), "parent", blockChain[i].ParentHash(),
-					"prevnumber", blockChain[i-1].Number(), "prevhash", blockChain[i-1].Hash())
-				return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x..], item %d is #%d [%x..] (parent [%x..])", i-1, blockChain[i-1].NumberU64(),
-					blockChain[i-1].Hash().Bytes()[:4], i, blockChain[i].NumberU64(), blockChain[i].Hash().Bytes()[:4], blockChain[i].ParentHash().Bytes()[:4])
+			prev := blockChain[i-1]
+			if block.NumberU64() != prev.NumberU64()+1 || block.ParentHash() != prev.Hash() {
+				log.Error("Non contiguous receipt insert",
+					"number", block.Number(), "hash", block.Hash(), "parent", block.ParentHash(),
+					"prevnumber", prev.Number(), "prevhash", prev.Hash())
+				return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x..], item %d is #%d [%x..] (parent [%x..])",
+					i-1, prev.NumberU64(), prev.Hash().Bytes()[:4],
+					i, block.NumberU64(), block.Hash().Bytes()[:4], block.ParentHash().Bytes()[:4])
 			}
 		}
-		if blockChain[i].NumberU64() <= ancientLimit {
-			ancientBlocks, ancientReceipts = append(ancientBlocks, blockChain[i]), append(ancientReceipts, receiptChain[i])
+		if block.NumberU64() <= ancientLimit {
+			ancientBlocks, ancientReceipts = append(ancientBlocks, block), append(ancientReceipts, receiptChain[i])
 		} else {
-			liveBlocks, liveReceipts = append(liveBlocks, blockChain[i]), append(liveReceipts, receiptChain[i])
+			liveBlocks, liveReceipts = append(liveBlocks, block), append(liveReceipts, receiptChain[i])
+		}
+
+		// Here we also validate that blob transactions in the block do not contain a sidecar.
+		// While the sidecar does not affect the block hash / tx hash, sending blobs within a block is not allowed.
+		for txIndex, tx := range block.Transactions() {
+			if tx.Type() == types.BlobTxType && tx.BlobTxSidecar() != nil {
+				return 0, fmt.Errorf("block #%d contains unexpected blob sidecar in tx at index %d", block.NumberU64(), txIndex)
+			}
 		}
 	}
 
@@ -1615,74 +1625,71 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		triedb := bc.stateCache.TrieDB()
 		// If we're running an archive node, always flush
 		if bc.cacheConfig.TrieDirtyDisabled {
-			err := triedb.Commit(block.Root(), false)
-			if err != nil {
-				return err
+			return triedb.Commit(block.Root(), false)
+		}
+		// Full but not archive node, do proper garbage collection
+		triedb.Reference(block.Root(), common.Hash{}) // metadata reference to keep trie alive
+		bc.triegc.Push(block.Root(), -int64(block.NumberU64()))
+
+		// Flush limits are not considered for the first TriesInMemory blocks.
+		current := block.NumberU64()
+		if current <= TriesInMemory {
+			return nil
+		}
+		// If we exceeded our memory allowance, flush matured singleton nodes to disk
+		var (
+			_, nodes, _, imgs = triedb.Size()
+			limit             = common.StorageSize(bc.cacheConfig.TrieDirtyLimit) * 1024 * 1024
+		)
+		if nodes > limit || imgs > 4*1024*1024 {
+			triedb.Cap(limit - ethdb.IdealBatchSize)
+		}
+		// Find the next state trie we need to commit
+		chosen := current - bc.triesInMemory
+		flushInterval := time.Duration(bc.flushInterval.Load())
+		// If we exceeded out time allowance, flush an entire trie to disk
+		if bc.gcproc > flushInterval {
+			canWrite := true
+			if posa, ok := bc.engine.(consensus.PoSA); ok {
+				if !posa.EnoughDistance(bc, block.Header()) {
+					canWrite = false
+				}
 			}
-		} else {
-			// Full but not archive node, do proper garbage collection
-			triedb.Reference(block.Root(), common.Hash{}) // metadata reference to keep trie alive
-			bc.triegc.Push(block.Root(), -int64(block.NumberU64()))
-
-			if current := block.NumberU64(); current > bc.triesInMemory {
-				// If we exceeded our memory allowance, flush matured singleton nodes to disk
-				var (
-					_, nodes, _, imgs = triedb.Size()
-					limit             = common.StorageSize(bc.cacheConfig.TrieDirtyLimit) * 1024 * 1024
-				)
-				if nodes > limit || imgs > 4*1024*1024 {
-					triedb.Cap(limit - ethdb.IdealBatchSize)
-				}
-				// Find the next state trie we need to commit
-				chosen := current - bc.triesInMemory
-
-				flushInterval := time.Duration(bc.flushInterval.Load())
-
-				// If we exceeded out time allowance, flush an entire trie to disk
-				if bc.gcproc > flushInterval {
-					canWrite := true
-					if posa, ok := bc.engine.(consensus.PoSA); ok {
-						if !posa.EnoughDistance(bc, block.Header()) {
-							canWrite = false
-						}
+			if canWrite {
+				// If the header is missing (canonical chain behind), we're reorging a low
+				// diff sidechain. Suspend committing until this operation is completed.
+				header := bc.GetHeaderByNumber(chosen)
+				if header == nil {
+					log.Warn("Reorg in progress, trie commit postponed", "number", chosen)
+				} else {
+					// If we're exceeding limits but haven't reached a large enough memory gap,
+					// warn the user that the system is becoming unstable.
+					if chosen < bc.lastWrite+bc.triesInMemory && bc.gcproc >= 2*flushInterval {
+						log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", flushInterval, "optimum", float64(chosen-bc.lastWrite)/float64(bc.triesInMemory))
 					}
-					if canWrite {
-						// If the header is missing (canonical chain behind), we're reorging a low
-						// diff sidechain. Suspend committing until this operation is completed.
-						header := bc.GetHeaderByNumber(chosen)
-						if header == nil {
-							log.Warn("Reorg in progress, trie commit postponed", "number", chosen)
-						} else {
-							// If we're exceeding limits but haven't reached a large enough memory gap,
-							// warn the user that the system is becoming unstable.
-							if chosen < bc.lastWrite+bc.triesInMemory && bc.gcproc >= 2*flushInterval {
-								log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", flushInterval, "optimum", float64(chosen-bc.lastWrite)/float64(bc.triesInMemory))
-							}
-							// Flush an entire trie and restart the counters
-							triedb.Commit(header.Root, true)
-							rawdb.WriteSafePointBlockNumber(bc.db, chosen)
-							bc.lastWrite = chosen
-							bc.gcproc = 0
-						}
-					}
+					// Flush an entire trie and restart the counters
+					triedb.Commit(header.Root, true)
+					rawdb.WriteSafePointBlockNumber(bc.db, chosen)
+					bc.lastWrite = chosen
+					bc.gcproc = 0
 				}
-				// Garbage collect anything below our required write retention
-				wg2 := sync.WaitGroup{}
-				for !bc.triegc.Empty() {
-					root, number := bc.triegc.Pop()
-					if uint64(-number) > chosen {
-						bc.triegc.Push(root, number)
-						break
-					}
-					wg2.Add(1)
-					go func() {
-						triedb.Dereference(root)
-						wg2.Done()
-					}()
-				}
-				wg2.Wait()
 			}
 		}
+		// Garbage collect anything below our required write retention
+		wg2 := sync.WaitGroup{}
+		for !bc.triegc.Empty() {
+			root, number := bc.triegc.Pop()
+			if uint64(-number) > chosen {
+				bc.triegc.Push(root, number)
+				break
+			}
+			wg2.Add(1)
+			go func() {
+				triedb.Dereference(root)
+				wg2.Done()
+			}()
+		}
+		wg2.Wait()
 		return nil
 	}
 	// Commit all cached state changes into underlying memory database.
@@ -2114,8 +2121,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		stats.processed++
 		stats.usedGas += usedGas
 
+		var snapDiffItems, snapBufItems common.StorageSize
+		if bc.snaps != nil {
+			snapDiffItems, snapBufItems, _ = bc.snaps.Size()
+		}
 		trieDiffNodes, trieBufNodes, trieImmutableBufNodes, _ := bc.triedb.Size()
-		stats.report(chain, it.index, trieDiffNodes, trieBufNodes, trieImmutableBufNodes, setHead)
+		stats.report(chain, it.index, snapDiffItems, snapBufItems, trieDiffNodes, trieBufNodes, trieImmutableBufNodes, setHead)
 
 		if !setHead {
 			// After merge we expect few side chains. Simply count
@@ -2816,6 +2827,12 @@ func (bc *BlockChain) skipBlock(err error, it *insertIterator) bool {
 func (bc *BlockChain) indexBlocks(tail *uint64, head uint64, done chan struct{}) {
 	defer func() { close(done) }()
 
+	// If head is 0, it means the chain is just initialized and no blocks are inserted,
+	// so don't need to indexing anything.
+	if head == 0 {
+		return
+	}
+
 	// The tail flag is not existent, it means the node is just initialized
 	// and all blocks(may from ancient store) are not indexed yet.
 	if tail == nil {
@@ -2874,6 +2891,14 @@ func (bc *BlockChain) maintainTxIndex() {
 	}
 	defer sub.Unsubscribe()
 	log.Info("Initialized transaction indexer", "limit", bc.TxLookupLimit())
+
+	// Launch the initial processing if chain is not empty. This step is
+	// useful in these scenarios that chain has no progress and indexer
+	// is never triggered.
+	if head := rawdb.ReadHeadBlock(bc.db); head != nil {
+		done = make(chan struct{})
+		go bc.indexBlocks(rawdb.ReadTxIndexTail(bc.db), head.NumberU64(), done)
+	}
 
 	for {
 		select {
