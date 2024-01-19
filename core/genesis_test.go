@@ -94,6 +94,17 @@ func testSetupGenesis(t *testing.T, scheme string) {
 			wantConfig: customg.Config,
 		},
 		{
+			name: "custom block in DB, genesis == chapel",
+			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
+				tdb := trie.NewDatabase(db, newDbConfig(scheme))
+				customg.Commit(db, tdb)
+				return SetupGenesisBlock(db, tdb, DefaultChapelGenesisBlock())
+			},
+			wantErr:    &GenesisMismatchError{Stored: customghash, New: params.ChapelGenesisHash},
+			wantHash:   params.ChapelGenesisHash,
+			wantConfig: params.ChapelChainConfig,
+		},
+		{
 			name: "compatible config in DB",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				tdb := trie.NewDatabase(db, newDbConfig(scheme))

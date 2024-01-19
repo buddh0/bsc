@@ -844,7 +844,7 @@ func dumpState(ctx *cli.Context) error {
 		AsyncBuild: false,
 	}
 	triesInMemory := ctx.Uint64(utils.TriesInMemoryFlag.Name)
-	snaptree, err := snapshot.New(snapConfig, db, trie.NewDatabase(db, nil), root, int(triesInMemory), false)
+	snaptree, err := snapshot.New(snapConfig, db, triedb, root, int(triesInMemory), false)
 	if err != nil {
 		return err
 	}

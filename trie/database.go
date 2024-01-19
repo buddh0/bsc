@@ -37,9 +37,6 @@ type Config struct {
 	Cache     int
 	HashDB    *hashdb.Config // Configs for hash-based scheme
 	PathDB    *pathdb.Config // Configs for experimental path-based scheme
-
-	// Testing hooks
-	OnCommit func(states *triestate.Set) // Hook invoked when commit is performed
 }
 
 // HashDefaults represents a config for using hash-based scheme with
@@ -87,20 +84,6 @@ type Database struct {
 	diskdb    ethdb.Database // Persistent database to store the snapshot
 	preimages *preimageStore // The store for caching preimages
 	backend   backend        // The backend for managing trie nodes
-}
-
-// prepare initializes the database with provided configs, but the
-// database backend is still left as nil.
-func prepare(diskdb ethdb.Database, config *Config) *Database {
-	var preimages *preimageStore
-	if config != nil && config.Preimages {
-		preimages = newPreimageStore(diskdb)
-	}
-	return &Database{
-		config:    config,
-		diskdb:    diskdb,
-		preimages: preimages,
-	}
 }
 
 // NewDatabase initializes the trie database with default settings, note
@@ -186,9 +169,6 @@ func (db *Database) Reader(blockRoot common.Hash) (Reader, error) {
 // The passed in maps(nodes, states) will be retained to avoid copying everything.
 // Therefore, these maps must not be changed afterwards.
 func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
-	if db.config != nil && db.config.OnCommit != nil {
-		db.config.OnCommit(states)
-	}
 	if db.preimages != nil {
 		db.preimages.commit(false)
 	}
@@ -205,8 +185,9 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 	return db.backend.Commit(root, report)
 }
 
-// Size returns the storage size of dirty trie nodes in front of the persistent
-// database and the size of cached preimages.
+// Size returns the storage size of diff layer nodes above the persistent disk
+// layer, the dirty nodes buffered within the disk layer, and the size of cached
+// preimages.
 func (db *Database) Size() (common.StorageSize, common.StorageSize, common.StorageSize, common.StorageSize) {
 	var (
 		diffs, nodes, immutablenodes common.StorageSize
