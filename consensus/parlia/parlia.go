@@ -1549,7 +1549,7 @@ func (p *Parlia) getCurrentValidators(blockHash common.Hash, blockNum *big.Int) 
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
-	}, blockNr, nil, nil)
+	}, &blockNr, nil, nil)
 	if err != nil {
 		return nil, nil, err
 	}

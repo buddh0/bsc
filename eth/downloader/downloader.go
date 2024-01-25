@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -212,7 +211,7 @@ type BlockChain interface {
 type DownloadOption func(downloader *Downloader) *Downloader
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn, options ...DownloadOption) *Downloader {
+func New(stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn, success func()) *Downloader {
 	if lightchain == nil {
 		lightchain = chain
 	}
@@ -231,6 +230,7 @@ func New(stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchai
 		syncStartBlock: chain.CurrentSnapBlock().Number.Uint64(),
 	}
 
+	// TODO how to use success
 	go dl.stateFetcher()
 	return dl
 }
@@ -280,11 +280,6 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 	}
 }
 
-// Synchronising returns whether the downloader is currently retrieving blocks.
-func (d *Downloader) Synchronising() bool {
-	return d.synchronising.Load()
-}
-
 // RegisterPeer injects a new download peer into the set of block source to be
 // used for fetching hashes and blocks from.
 func (d *Downloader) RegisterPeer(id string, version uint, peer Peer) error {
@@ -301,11 +296,6 @@ func (d *Downloader) RegisterPeer(id string, version uint, peer Peer) error {
 		return err
 	}
 	return nil
-}
-
-// RegisterLightPeer injects a light client peer, wrapping it so it appears as a regular peer.
-func (d *Downloader) RegisterLightPeer(id string, version uint, peer LightPeer) error {
-	return d.RegisterPeer(id, version, &lightPeerWrapper{peer})
 }
 
 // UnregisterPeer remove a peer from the known list, preventing any action from
@@ -394,7 +384,9 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td, ttd *big.Int, 
 		// subsequent state reads, explicitly disable the trie database and state
 		// syncer is responsible to address and correct any state missing.
 		if d.blockchain.TrieDB().Scheme() == rawdb.PathScheme {
-			d.blockchain.TrieDB().Reset(types.EmptyRootHash)
+			if err := d.blockchain.TrieDB().Disable(); err != nil {
+				return err
+			}
 		}
 		// Snap sync uses the snapshot namespace to store potentially flaky data until
 		// sync completely heals and finishes. Pause snapshot maintenance in the mean-
@@ -462,9 +454,6 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 			d.mux.Post(DoneEvent{latest})
 		}
 	}()
-	if p.version < eth.ETH66 {
-		return fmt.Errorf("%w: advertized %d < required %d", errTooOld, p.version, eth.ETH66)
-	}
 	mode := d.getMode()
 
 	if !beaconMode {
@@ -1235,41 +1224,13 @@ func (d *Downloader) fetchReceipts(from uint64, beaconMode bool) error {
 // keeps processing and scheduling them into the header chain and downloader's
 // queue until the stream ends or a failure occurs.
 func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode bool) error {
-	// Keep a count of uncertain headers to roll back
 	var (
-		rollback    uint64 // Zero means no rollback (fine as you can't unroll the genesis)
-		rollbackErr error
-		mode        = d.getMode()
+		mode       = d.getMode()
+		gotHeaders = false // Wait for batches of headers to process
 	)
-	defer func() {
-		if rollback > 0 {
-			lastHeader, lastFastBlock, lastBlock := d.lightchain.CurrentHeader().Number, common.Big0, common.Big0
-			if mode != LightSync {
-				lastFastBlock = d.blockchain.CurrentSnapBlock().Number
-				lastBlock = d.blockchain.CurrentBlock().Number
-			}
-			if err := d.lightchain.SetHead(rollback - 1); err != nil { // -1 to target the parent of the first uncertain block
-				// We're already unwinding the stack, only print the error to make it more visible
-				log.Error("Failed to roll back chain segment", "head", rollback-1, "err", err)
-			}
-			curFastBlock, curBlock := common.Big0, common.Big0
-			if mode != LightSync {
-				curFastBlock = d.blockchain.CurrentSnapBlock().Number
-				curBlock = d.blockchain.CurrentBlock().Number
-			}
-			log.Warn("Rolled back chain segment",
-				"header", fmt.Sprintf("%d->%d", lastHeader, d.lightchain.CurrentHeader().Number),
-				"snap", fmt.Sprintf("%d->%d", lastFastBlock, curFastBlock),
-				"block", fmt.Sprintf("%d->%d", lastBlock, curBlock), "reason", rollbackErr)
-		}
-	}()
-	// Wait for batches of headers to process
-	gotHeaders := false
-
 	for {
 		select {
 		case <-d.cancelCh:
-			rollbackErr = errCanceled
 			return errCanceled
 
 		case task := <-d.headerProcCh:
@@ -1318,8 +1279,6 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 						}
 					}
 				}
-				// Disable any rollback and return
-				rollback = 0
 				return nil
 			}
 			// Otherwise split the chunk of headers into batches and process them
@@ -1330,7 +1289,6 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 				// Terminate if something failed in between processing chunks
 				select {
 				case <-d.cancelCh:
-					rollbackErr = errCanceled
 					return errCanceled
 				default:
 				}
@@ -1346,23 +1304,8 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 				if mode == SnapSync || mode == LightSync {
 					if len(chunkHeaders) > 0 {
 						if n, err := d.lightchain.InsertHeaderChain(chunkHeaders); err != nil {
-							rollbackErr = err
-
-							// If some headers were inserted, track them as uncertain
-							if mode == SnapSync && n > 0 && rollback == 0 {
-								rollback = chunkHeaders[0].Number.Uint64()
-							}
 							log.Warn("Invalid header encountered", "number", chunkHeaders[n].Number, "hash", chunkHashes[n], "parent", chunkHeaders[n].ParentHash, "err", err)
 							return fmt.Errorf("%w: %v", errInvalidChain, err)
-						}
-						// All verifications passed, track all headers within the alloted limits
-						if mode == SnapSync {
-							head := chunkHeaders[len(chunkHeaders)-1].Number.Uint64()
-							if head-rollback > uint64(fsHeaderSafetyNet) {
-								rollback = head - uint64(fsHeaderSafetyNet)
-							} else {
-								rollback = 1
-							}
 						}
 					}
 				}
@@ -1372,7 +1315,6 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 					for d.queue.PendingBodies() >= maxQueuedHeaders || d.queue.PendingReceipts() >= maxQueuedHeaders {
 						select {
 						case <-d.cancelCh:
-							rollbackErr = errCanceled
 							return errCanceled
 						case <-time.After(time.Second):
 						}
@@ -1380,7 +1322,6 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 					// Otherwise insert the headers for content retrieval
 					inserts := d.queue.Schedule(chunkHeaders, chunkHashes, origin)
 					if len(inserts) != len(chunkHeaders) {
-						rollbackErr = fmt.Errorf("stale headers: len inserts %v len(chunk) %v", len(inserts), len(chunkHeaders))
 						return fmt.Errorf("%w: stale headers", errBadPeer)
 					}
 				}

@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/urfave/cli/v2"
 )
@@ -52,11 +51,6 @@ type StatetestResult struct {
 }
 
 func stateTestCmd(ctx *cli.Context) error {
-	// Configure the go-ethereum logger
-	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
-	glogger.Verbosity(log.Lvl(ctx.Int(VerbosityFlag.Name)))
-	log.Root().SetHandler(glogger)
-
 	// Configure the EVM logger
 	config := &logger.Config{
 		EnableMemory:     !ctx.Bool(DisableMemoryFlag.Name),
@@ -114,13 +108,14 @@ func runStateTest(fname string, cfg vm.Config, jsonOut, dump bool) error {
 						fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%#x\"}\n", root)
 					}
 				}
+				// Dump any state to aid debugging
+				if dump {
+					dump := state.RawDump(nil)
+					result.State = &dump
+				}
 				if err != nil {
-					// Test failed, mark as so and dump any state to aid debugging
+					// Test failed, mark as so
 					result.Pass, result.Error = false, err.Error()
-					if dump {
-						dump := state.RawDump(nil)
-						result.State = &dump
-					}
 				}
 			})
 			results = append(results, *result)
