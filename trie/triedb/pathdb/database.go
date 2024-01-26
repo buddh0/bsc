@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -480,4 +482,25 @@ func (db *Database) modifyAllowed() error {
 		return errDatabaseWaitSync
 	}
 	return nil
+}
+
+// GetAllRooHash returns all diffLayer and diskLayer root hash
+func (db *Database) GetAllRooHash() [][]string {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	data := make([][]string, 0, len(db.tree.layers))
+	for _, v := range db.tree.layers {
+		if dl, ok := v.(*diffLayer); ok {
+			data = append(data, []string{fmt.Sprintf("%d", dl.block), dl.rootHash().String()})
+		}
+	}
+	sort.Slice(data, func(i, j int) bool {
+		block1, _ := strconv.Atoi(data[i][0])
+		block2, _ := strconv.Atoi(data[j][0])
+		return block1 > block2
+	})
+
+	data = append(data, []string{"-1", db.tree.bottom().rootHash().String()})
+	return data
 }
