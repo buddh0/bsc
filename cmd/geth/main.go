@@ -98,7 +98,6 @@ var (
 		utils.SnapshotFlag,
 		utils.TxLookupLimitFlag, // deprecated
 		utils.TransactionHistoryFlag,
-		utils.StateSchemeFlag,
 		utils.StateHistoryFlag,
 		utils.PathDBSyncFlag,
 		utils.LightServeFlag,       // deprecated
@@ -170,7 +169,7 @@ var (
 		utils.BLSPasswordFileFlag,
 		utils.BLSWalletDirFlag,
 		utils.VoteJournalDirFlag,
-	}, utils.NetworkFlags, utils.DatabasePathFlags)
+	}, utils.NetworkFlags, utils.DatabaseFlags)
 
 	rpcFlags = []cli.Flag{
 		utils.HTTPEnabledFlag,
@@ -261,6 +260,9 @@ func init() {
 		blsCommand,
 		// See verkle.go
 		verkleCommand,
+	}
+	if logTestCommand != nil {
+		app.Commands = append(app.Commands, logTestCommand)
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 

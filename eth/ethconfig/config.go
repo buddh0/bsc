@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/parlia"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -51,11 +50,10 @@ var FullNodeGPO = gasprice.Config{
 // Defaults contains default settings for use on the BSC main net.
 var Defaults = Config{
 	SyncMode:           downloader.SnapSync,
-	NetworkId:          56,
+	NetworkId:          0, // enable auto configuration of networkID == chainID
 	TxLookupLimit:      2350000,
 	TransactionHistory: 2350000,
 	StateHistory:       params.FullImmutabilityThreshold,
-	StateScheme:        rawdb.HashScheme,
 	LightPeers:         100,
 	DatabaseCache:      512,
 	TrieCleanCache:     154,
@@ -77,14 +75,15 @@ var Defaults = Config{
 
 //go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
 
-// Config contains configuration options for of the ETH and LES protocols.
+// Config contains configuration options for ETH and LES protocols.
 type Config struct {
 	// The genesis block, which is inserted if the database is empty.
 	// If nil, the Ethereum main net block is used.
 	Genesis *core.Genesis `toml:",omitempty"`
 
-	// Protocol options
-	NetworkId uint64 // Network ID to use for selecting peers to connect to
+	// Network ID separates blockchains on the peer-to-peer networking level. When left
+	// zero, the chain ID is used as network ID.
+	NetworkId uint64
 	SyncMode  downloader.SyncMode
 
 	// DisablePeerTxBroadcast is an optional config and disabled by default, and usually you do not need it.
@@ -114,8 +113,11 @@ type Config struct {
 	TxLookupLimit      uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
 	TransactionHistory uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
 	StateHistory       uint64 `toml:",omitempty"` // The maximum number of blocks from head whose state histories are reserved.
-	StateScheme        string `toml:",omitempty"` // State scheme used to store ethereum state and merkle trie nodes on top
-	PathSyncFlush      bool   `toml:",omitempty"` // State scheme used to store ethereum state and merkle trie nodes on top
+	// State scheme represents the scheme used to store ethereum states and trie
+	// nodes on top. It can be 'hash', 'path', or none which means use the scheme
+	// consistent with persistent state.
+	StateScheme   string `toml:",omitempty"` // State scheme used to store ethereum state and merkle trie nodes on top
+	PathSyncFlush bool   `toml:",omitempty"` // State scheme used to store ethereum state and merkle trie nodes on top
 
 	// RequiredBlocks is a set of block number -> hash mappings which must be in the
 	// canonical chain of all remote peers. Setting the option makes geth verify the
@@ -209,7 +211,7 @@ func CreateConsensusEngine(config *params.ChainConfig, db ethdb.Database, ee *et
 		return clique.New(config.Clique, db), nil
 	}
 	// If defaulting to proof-of-work, enforce an already merged network since
-	// we cannot run PoW algorithms and more, so we cannot even follow a chain
+	// we cannot run PoW algorithms anymore, so we cannot even follow a chain
 	// not coordinated by a beacon node.
 	if !config.TerminalTotalDifficultyPassed {
 		return nil, errors.New("ethash is only supported as a historical component of already merged networks")

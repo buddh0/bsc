@@ -650,9 +650,9 @@ var (
 	}
 
 	// MISC settings
-	SyncTargetFlag = &cli.PathFlag{
+	SyncTargetFlag = &cli.StringFlag{
 		Name:      "synctarget",
-		Usage:     `File for containing the hex-encoded block-rlp as sync target(dev feature)`,
+		Usage:     `Hash of the block to full sync to (dev testing feature)`,
 		TakesFile: true,
 		Category:  flags.MiscCategory,
 	}
@@ -1100,12 +1100,13 @@ var (
 	// NetworkFlags is the flag group of all built-in supported networks.
 	NetworkFlags = append([]cli.Flag{BSCMainnetFlag}, TestnetFlags...)
 
-	// DatabasePathFlags is the flag group of all database path flags.
-	DatabasePathFlags = []cli.Flag{
+	// DatabaseFlags is the flag group of all database flags.
+	DatabaseFlags = []cli.Flag{
 		DataDirFlag,
 		AncientFlag,
 		RemoteDBFlag,
 		DBEngineFlag,
+		StateSchemeFlag,
 		HttpHeaderFlag,
 	}
 )
@@ -1123,7 +1124,7 @@ func MakeDataDir(ctx *cli.Context) string {
 
 // setNodeKey creates a node key from set command line flags, either loading it
 // from a file or as a specified hex value. If neither flags were provided, this
-// method returns nil and an emphemeral key is to be generated.
+// method returns nil and an ephemeral key is to be generated.
 func setNodeKey(ctx *cli.Context, cfg *p2p.Config) {
 	var (
 		hex  = ctx.String(NodeKeyHexFlag.Name)
@@ -1156,26 +1157,37 @@ func setNodeUserIdent(ctx *cli.Context, cfg *node.Config) {
 
 // setBootstrapNodes creates a list of bootstrap nodes from the command line
 // flags, reverting to pre-configured ones if none have been specified.
+// Priority order for bootnodes configuration:
+//
+// 1. --bootnodes flag
+// 2. Config file
+// 3. Network preset flags (e.g. --goerli)
+// 4. default to mainnet nodes
 func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 	urls := params.MainnetBootnodes
-	switch {
-	case ctx.IsSet(BootnodesFlag.Name):
+	if ctx.IsSet(BootnodesFlag.Name) {
 		urls = SplitAndTrim(ctx.String(BootnodesFlag.Name))
-	case cfg.BootstrapNodes != nil:
-		return // already set, don't apply defaults.
+	} else {
+		if cfg.BootstrapNodes != nil {
+			return // Already set by config file, don't apply defaults.
+		}
 	}
+	cfg.BootstrapNodes = mustParseBootnodes(urls)
+}
 
-	cfg.BootstrapNodes = make([]*enode.Node, 0, len(urls))
+func mustParseBootnodes(urls []string) []*enode.Node {
+	nodes := make([]*enode.Node, 0, len(urls))
 	for _, url := range urls {
 		if url != "" {
 			node, err := enode.Parse(enode.ValidSchemes, url)
 			if err != nil {
 				log.Crit("Bootstrap URL invalid", "enode", url, "err", err)
-				continue
+				return nil
 			}
-			cfg.BootstrapNodes = append(cfg.BootstrapNodes, node)
+			nodes = append(nodes, node)
 		}
 	}
+	return nodes
 }
 
 // setBootstrapNodesV5 creates a list of bootstrap nodes from the command line
@@ -1821,7 +1833,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
 	godebug.SetGCPercent(int(gogc))
 
-	if ctx.IsSet(SyncModeFlag.Name) {
+	if ctx.IsSet(SyncTargetFlag.Name) {
+		cfg.SyncMode = downloader.FullSync // dev sync target forces full sync
+	} else if ctx.IsSet(SyncModeFlag.Name) {
 		cfg.SyncMode = *flags.GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
 	}
 	if ctx.IsSet(NetworkIdFlag.Name) {
@@ -1883,15 +1897,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(StateHistoryFlag.Name) {
 		cfg.StateHistory = ctx.Uint64(StateHistoryFlag.Name)
 	}
-	// Parse state scheme, abort the process if it's not compatible.
-	chaindb := tryMakeReadOnlyDatabase(ctx, stack)
-	scheme, err := ParseStateScheme(ctx, chaindb)
-	chaindb.Close()
-	if err != nil {
-		Fatalf("%v", err)
+	if ctx.IsSet(StateSchemeFlag.Name) {
+		cfg.StateScheme = ctx.String(StateSchemeFlag.Name)
 	}
-	cfg.StateScheme = scheme
-
 	// Parse transaction history flag, if user is still using legacy config
 	// file with 'TxLookupLimit' configured, copy the value to 'TransactionHistory'.
 	if cfg.TransactionHistory == ethconfig.Defaults.TransactionHistory && cfg.TxLookupLimit != ethconfig.Defaults.TxLookupLimit {
@@ -2244,12 +2252,11 @@ func SplitTagsFlag(tagsFlag string) map[string]string {
 	return tagsMap
 }
 
-// MakeChainDatabase open an LevelDB using the flags passed to the client and will hard crash if it fails.
+// MakeChainDatabase opens a database using the flags passed to the client and will hard crash if it fails.
 func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly, disableFreeze bool) ethdb.Database {
 	var (
 		cache   = ctx.Int(CacheFlag.Name) * ctx.Int(CacheDatabaseFlag.Name) / 100
 		handles = MakeDatabaseHandles(ctx.Int(FDLimitFlag.Name))
-
 		err     error
 		chainDb ethdb.Database
 	)
@@ -2305,7 +2312,7 @@ func DialRPCWithHeaders(endpoint string, headers []string) (*rpc.Client, error) 
 	}
 	var opts []rpc.ClientOption
 	if len(headers) > 0 {
-		var customHeaders = make(http.Header)
+		customHeaders := make(http.Header)
 		for _, h := range headers {
 			kv := strings.Split(h, ":")
 			if len(kv) != 2 {
@@ -2348,7 +2355,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	if gcmode := ctx.String(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
-	scheme, err := ParseStateScheme(ctx, chainDb)
+	scheme, err := rawdb.ParseStateScheme(ctx.String(StateSchemeFlag.Name), chainDb)
 	if err != nil {
 		Fatalf("%v", err)
 	}
@@ -2411,52 +2418,12 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 	return preloads
 }
 
-// ParseStateScheme checks if the specified state scheme is compatible with
-// the stored state.
-//
-//   - If the provided scheme is none, use the scheme consistent with persistent
-//     state, or fallback to hash-based scheme if state is empty.
-//
-//   - If the provided scheme is hash, use hash-based scheme or error out if not
-//     compatible with persistent state scheme.
-//
-//   - If the provided scheme is path: use path-based scheme or error out if not
-//     compatible with persistent state scheme.
-func ParseStateScheme(ctx *cli.Context, disk ethdb.Database) (string, error) {
-	// If state scheme is not specified, use the scheme consistent
-	// with persistent state, or fallback to hash mode if database
-	// is empty.
-	provided, err := compareCLIWithConfig(ctx)
-	if err != nil {
-		log.Error("failed to compare CLI with config", "error", err)
-		return "", err
-	}
-
-	stored := rawdb.ReadStateScheme(disk)
-	if provided == "" {
-		if stored == "" {
-			// use default scheme for empty database, flip it when
-			// path mode is chosen as default
-			log.Info("State scheme set to default", "scheme", rawdb.HashScheme)
-			return rawdb.HashScheme, nil
-		}
-		log.Info("State scheme set to already existing disk db", "scheme", stored)
-		return stored, nil // reuse scheme of persistent scheme
-	}
-	// If state scheme is specified, ensure it's compatible with persistent state.
-	if stored == "" || provided == stored {
-		log.Info("State scheme set by user", "scheme", provided)
-		return provided, nil
-	}
-	return "", fmt.Errorf("incompatible state scheme, db stored: %s, user provided: %s", stored, provided)
-}
-
 // MakeTrieDatabase constructs a trie database based on the configured scheme.
 func MakeTrieDatabase(ctx *cli.Context, disk ethdb.Database, preimage bool, readOnly bool) *trie.Database {
 	config := &trie.Config{
 		Preimages: preimage,
 	}
-	scheme, err := ParseStateScheme(ctx, disk)
+	scheme, err := rawdb.ParseStateScheme(ctx.String(StateSchemeFlag.Name), disk)
 	if err != nil {
 		Fatalf("%v", err)
 	}

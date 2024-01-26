@@ -62,7 +62,7 @@ var (
 				Flags: flags.Merge([]cli.Flag{
 					utils.BloomFilterSizeFlag,
 					utils.TriesInMemoryFlag,
-				}, utils.NetworkFlags, utils.DatabasePathFlags),
+				}, utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
 geth snapshot prune-state <state-root>
 will prune historical state data with the help of the state snapshot.
@@ -104,9 +104,7 @@ so it's very necessary to do block data prune, this feature will handle it.
 				Usage:     "Recalculate state hash based on the snapshot for verification",
 				ArgsUsage: "<root>",
 				Action:    verifyState,
-				Flags: flags.Merge([]cli.Flag{
-					utils.StateSchemeFlag,
-				}, utils.NetworkFlags, utils.DatabasePathFlags),
+				Flags:     flags.Merge(utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
 geth snapshot verify-state <state-root>
 will traverse the whole accounts and storages set based on the specified
@@ -142,10 +140,10 @@ the trie clean cache with default directory will be deleted.
 				Usage:     "Check that there is no 'dangling' snap storage",
 				ArgsUsage: "<root>",
 				Action:    checkDanglingStorage,
-				Flags:     flags.Merge(utils.NetworkFlags, utils.DatabasePathFlags),
+				Flags:     flags.Merge(utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
-geth snapshot check-dangling-storage <state-root> traverses the snap storage 
-data, and verifies that all snapshot storage data has a corresponding account. 
+geth snapshot check-dangling-storage <state-root> traverses the snap storage
+data, and verifies that all snapshot storage data has a corresponding account.
 `,
 			},
 			{
@@ -153,10 +151,10 @@ data, and verifies that all snapshot storage data has a corresponding account.
 				Usage:     "Check all snapshot layers for the a specific account",
 				ArgsUsage: "<address | hash>",
 				Action:    checkAccount,
-				Flags:     flags.Merge(utils.NetworkFlags, utils.DatabasePathFlags),
+				Flags:     flags.Merge(utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
 geth snapshot inspect-account <address | hash> checks all snapshot layers and prints out
-information about the specified address. 
+information about the specified address.
 `,
 			},
 			{
@@ -164,9 +162,7 @@ information about the specified address.
 				Usage:     "Traverse the state with given root hash and perform quick verification",
 				ArgsUsage: "<root>",
 				Action:    traverseState,
-				Flags: flags.Merge([]cli.Flag{
-					utils.StateSchemeFlag,
-				}, utils.NetworkFlags, utils.DatabasePathFlags),
+				Flags:     flags.Merge(utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
 geth snapshot traverse-state <state-root>
 will traverse the whole state from the given state root and will abort if any
@@ -181,15 +177,13 @@ It's also usable without snapshot enabled.
 				Usage:     "Traverse the state with given root hash and perform detailed verification",
 				ArgsUsage: "<root>",
 				Action:    traverseRawState,
-				Flags: flags.Merge([]cli.Flag{
-					utils.StateSchemeFlag,
-				}, utils.NetworkFlags, utils.DatabasePathFlags),
+				Flags:     flags.Merge(utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
 geth snapshot traverse-rawstate <state-root>
 will traverse the whole state from the given root and will abort if any referenced
 trie node or contract code is missing. This command can be used for state integrity
 verification. The default checking target is the HEAD state. It's basically identical
-to traverse-state, but the check granularity is smaller. 
+to traverse-state, but the check granularity is smaller.
 
 It's also usable without snapshot enabled.
 `,
@@ -205,11 +199,10 @@ It's also usable without snapshot enabled.
 					utils.StartKeyFlag,
 					utils.DumpLimitFlag,
 					utils.TriesInMemoryFlag,
-					utils.StateSchemeFlag,
-				}, utils.NetworkFlags, utils.DatabasePathFlags),
+				}, utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
 This command is semantically equivalent to 'geth dump', but uses the snapshots
-as the backend data source, making this command a lot faster. 
+as the backend data source, making this command a lot faster.
 
 The argument is interpreted as block number or hash. If none is provided, the latest
 block is used.
@@ -557,7 +550,9 @@ func checkDanglingStorage(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	return snapshot.CheckDanglingStorage(utils.MakeChainDatabase(ctx, stack, true, false))
+	db := utils.MakeChainDatabase(ctx, stack, true, false)
+	defer db.Close()
+	return snapshot.CheckDanglingStorage(db)
 }
 
 // traverseState is a helper function used for pruning verification.
@@ -637,6 +632,11 @@ func traverseState(ctx *cli.Context) error {
 			storageIter := trie.NewIterator(storageIt)
 			for storageIter.Next() {
 				slots += 1
+
+				if time.Since(lastReport) > time.Second*8 {
+					log.Info("Traversing state", "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
+					lastReport = time.Now()
+				}
 			}
 			if storageIter.Err != nil {
 				log.Error("Failed to traverse storage trie", "root", acc.Root, "err", storageIter.Err)
@@ -790,6 +790,10 @@ func traverseRawState(ctx *cli.Context) error {
 					// Bump the counter if it's leaf node.
 					if storageIter.Leaf() {
 						slots += 1
+					}
+					if time.Since(lastReport) > time.Second*8 {
+						log.Info("Traversing state", "nodes", nodes, "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
+						lastReport = time.Now()
 					}
 				}
 				if storageIter.Error() != nil {

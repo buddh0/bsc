@@ -114,7 +114,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		if sidecar == nil {
 			return fmt.Errorf("missing sidecar in blob transaction")
 		}
-		// Ensure the number of items in the blob transaction and vairous side
+		// Ensure the number of items in the blob transaction and various side
 		// data match up before doing any expensive validations
 		hashes := tx.BlobHashes()
 		if len(hashes) == 0 {
@@ -182,7 +182,7 @@ type ValidationOptionsWithState struct {
 	// be rejected once the number of remaining slots reaches zero.
 	UsedAndLeftSlots func(addr common.Address) (int, int)
 
-	// ExistingExpenditure is a mandatory callback to retrieve the cummulative
+	// ExistingExpenditure is a mandatory callback to retrieve the cumulative
 	// cost of the already pooled transactions to check for overdrafts.
 	ExistingExpenditure func(addr common.Address) *big.Int
 

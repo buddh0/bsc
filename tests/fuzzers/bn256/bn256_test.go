@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,25 +14,24 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package bn256
 
-import (
-	"fmt"
-	"os"
+import "testing"
 
-	"github.com/ethereum/go-ethereum/tests/fuzzers/snap"
-)
+func FuzzAdd(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		fuzzAdd(data)
+	})
+}
 
-func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: debug <file>\n")
-		os.Exit(1)
-	}
-	crasher := os.Args[1]
-	data, err := os.ReadFile(crasher)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error loading crasher %v: %v", crasher, err)
-		os.Exit(1)
-	}
-	snap.FuzzTrieNodes(data)
+func FuzzMul(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		fuzzMul(data)
+	})
+}
+
+func FuzzPair(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		fuzzPair(data)
+	})
 }

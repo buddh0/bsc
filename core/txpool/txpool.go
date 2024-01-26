@@ -70,7 +70,7 @@ type TxPool struct {
 	reservations map[common.Address]SubPool // Map with the account to pool reservations
 	reserveLock  sync.Mutex                 // Lock protecting the account reservations
 
-	subs event.SubscriptionScope // Subscription scope to unscubscribe all on shutdown
+	subs event.SubscriptionScope // Subscription scope to unsubscribe all on shutdown
 	quit chan chan error         // Quit channel to tear down the head updater
 }
 
@@ -155,13 +155,15 @@ func (p *TxPool) Close() error {
 	if err := <-errc; err != nil {
 		errs = append(errs, err)
 	}
-
 	// Terminate each subpool
 	for _, subpool := range p.subpools {
 		if err := subpool.Close(); err != nil {
 			errs = append(errs, err)
 		}
 	}
+	// Unsubscribe anyone still listening for tx events
+	p.subs.Close()
+
 	if len(errs) > 0 {
 		return fmt.Errorf("subpool close errors: %v", errs)
 	}
@@ -316,12 +318,12 @@ func (p *TxPool) Pending(enforceTips bool) map[common.Address][]*LazyTransaction
 	return txs
 }
 
-// SubscribeNewTxsEvent registers a subscription of NewTxsEvent and starts sending
-// events to the given channel.
-func (p *TxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
+// SubscribeTransactions registers a subscription for new transaction events,
+// supporting feeding only newly seen or also resurrected transactions.
+func (p *TxPool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription {
 	subs := make([]event.Subscription, 0, len(p.subpools))
 	for _, subpool := range p.subpools {
-		sub := subpool.SubscribeTransactions(ch)
+		sub := subpool.SubscribeTransactions(ch, reorgs)
 		if sub != nil { // sub will be nil when subpool have been shut down
 			subs = append(subs, sub)
 		}
@@ -329,7 +331,7 @@ func (p *TxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscrip
 	return p.subs.Track(event.JoinSubscriptions(subs...))
 }
 
-// SubscribeNewTxsEvent registers a subscription of NewTxsEvent and starts sending
+// SubscribeReannoTxsEvent registers a subscription of ReannoTxsEvent and starts sending
 // events to the given channel.
 func (p *TxPool) SubscribeReannoTxsEvent(ch chan<- core.ReannoTxsEvent) event.Subscription {
 	subs := make([]event.Subscription, 0, len(p.subpools))
@@ -420,7 +422,7 @@ func (p *TxPool) Locals() []common.Address {
 }
 
 // Status returns the known status (unknown/pending/queued) of a transaction
-// identified by their hashes.
+// identified by its hash.
 func (p *TxPool) Status(hash common.Hash) TxStatus {
 	for _, subpool := range p.subpools {
 		if status := subpool.Status(hash); status != TxStatusUnknown {

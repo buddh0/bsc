@@ -813,13 +813,24 @@ LOOP:
 		if ltx == nil {
 			break
 		}
-		tx := ltx.Resolve()
-		if tx == nil {
-			log.Warn("Ignoring evicted transaction")
+		// If we don't have enough space for the next transaction, skip the account.
+		if env.gasPool.Gas() < ltx.Gas {
+			log.Trace("Not enough gas left for transaction", "hash", ltx.Hash, "left", env.gasPool.Gas(), "needed", ltx.Gas)
 			txs.Pop()
 			continue
 		}
-
+		if left := uint64(params.MaxBlobGasPerBlock - env.blobs*params.BlobTxBlobGasPerBlob); left < ltx.BlobGas {
+			log.Trace("Not enough blob gas left for transaction", "hash", ltx.Hash, "left", left, "needed", ltx.BlobGas)
+			txs.Pop()
+			continue
+		}
+		// Transaction seems to fit, pull it up from the pool
+		tx := ltx.Resolve()
+		if tx == nil {
+			log.Trace("Ignoring evicted transaction", "hash", ltx.Hash)
+			txs.Pop()
+			continue
+		}
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
 		from, _ := types.Sender(env.signer, tx)
@@ -827,11 +838,10 @@ LOOP:
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
 		if tx.Protected() && !w.chainConfig.IsEIP155(env.header.Number) {
-			log.Trace("Ignoring replay protected transaction", "hash", tx.Hash(), "eip155", w.chainConfig.EIP155Block)
+			log.Trace("Ignoring replay protected transaction", "hash", ltx.Hash, "eip155", w.chainConfig.EIP155Block)
 			txs.Pop()
 			continue
 		}
-
 		// Start executing the transaction
 		env.state.SetTxContext(tx.Hash(), env.tcount)
 
@@ -839,7 +849,7 @@ LOOP:
 		switch {
 		case errors.Is(err, core.ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
-			log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
+			log.Trace("Skipping transaction with low nonce", "hash", ltx.Hash, "sender", from, "nonce", tx.Nonce())
 			txs.Shift()
 
 		case errors.Is(err, nil):
@@ -851,7 +861,7 @@ LOOP:
 		default:
 			// Transaction is regarded as invalid, drop all consecutive transactions from
 			// the same sender because of `nonce-too-high` clause.
-			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+			log.Debug("Transaction failed, account skipped", "hash", ltx.Hash, "err", err)
 			txs.Pop()
 		}
 	}
@@ -1110,7 +1120,8 @@ LOOP:
 
 		// subscribe before fillTransactions
 		txsCh := make(chan core.NewTxsEvent, txChanSize)
-		sub := w.eth.TxPool().SubscribeNewTxsEvent(txsCh)
+		// Subscribe for transaction insertion events (whether from network or resurrects)
+		sub := w.eth.TxPool().SubscribeTransactions(txsCh, true)
 		// if TxPool has been stopped, `sub` would be nil, it could happen on shutdown.
 		if sub == nil {
 			log.Info("commitWork SubscribeNewTxsEvent return nil")
