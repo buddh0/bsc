@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/holiman/uint256"
 )
 
 const (
@@ -1044,7 +1045,7 @@ func (w *worker) generateWork(params *generateParams) *newPayloadResult {
 	}
 	return &newPayloadResult{
 		block:    block,
-		fees:     fees,
+		fees:     fees.ToBig(),
 		sidecars: work.sidecars,
 	}
 }
@@ -1206,7 +1207,7 @@ LOOP:
 	}
 	// get the most profitable work
 	bestWork := workList[0]
-	bestReward := new(big.Int)
+	bestReward := new(uint256.Int)
 	for i, wk := range workList {
 		balance := wk.state.GetBalance(consensus.SystemAddress)
 		log.Debug("Get the most profitable work", "index", i, "balance", balance, "bestReward", bestReward)
@@ -1243,6 +1244,8 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 			env.state.CorrectAccountsRoot(w.chain.CurrentBlock().Root)
 		*/
 
+		fees := env.state.GetBalance(consensus.SystemAddress).ToBig()
+		feesInEther := new(big.Float).Quo(new(big.Float).SetInt(fees), big.NewFloat(params.Ether))
 		// Withdrawals are set to nil here, because this is only called in PoW.
 		finalizeStart := time.Now()
 		block, receipts, err := w.engine.FinalizeAndAssemble(w.chain, types.CopyHeader(env.header), env.state, env.txs, nil, env.receipts, nil)
@@ -1260,8 +1263,6 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		if !w.isTTDReached(block.Header()) {
 			select {
 			case w.taskCh <- &task{receipts: receipts, state: env.state, block: block, createdAt: time.Now()}:
-				fees := env.state.GetBalance(consensus.SystemAddress)
-				feesInEther := new(big.Float).Quo(new(big.Float).SetInt(fees), big.NewFloat(params.Ether))
 				log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
 					"txs", env.tcount, "gas", block.GasUsed(), "fees", feesInEther, "elapsed", common.PrettyDuration(time.Since(start)))
 

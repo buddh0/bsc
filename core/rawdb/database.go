@@ -228,8 +228,8 @@ func resolveChainFreezerDir(ancient string) string {
 	// sub folder, if not then two possibilities:
 	// - chain freezer is not initialized
 	// - chain freezer exists in legacy location (root ancient folder)
-	chain := path.Join(ancient, chainFreezerName)
-	state := path.Join(ancient, stateFreezerName)
+	chain := path.Join(ancient, ChainFreezerName)
+	state := path.Join(ancient, StateFreezerName)
 	if common.FileExist(chain) {
 		return chain
 	}
@@ -811,7 +811,6 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 		{"snapshotRecoveryNumber", pp(ReadSnapshotRecoveryNumber(db))},
 		{"snapshotRoot", fmt.Sprintf("%v", ReadSnapshotRoot(db))},
 		{"txIndexTail", pp(ReadTxIndexTail(db))},
-		{"fastTxLookupLimit", pp(ReadFastTxLookupLimit(db))},
 	}
 	return data
 }

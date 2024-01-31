@@ -85,6 +85,7 @@ type peerSet struct {
 
 	lock   sync.RWMutex
 	closed bool
+	quitCh chan struct{} // Quit channel to signal termination
 }
 
 // newPeerSet creates a new peer set to track the active participants.
@@ -97,6 +98,7 @@ func newPeerSet() *peerSet {
 		trustPend: make(map[string]*trust.Peer),
 		bscWait:   make(map[string]chan *bsc.Peer),
 		bscPend:   make(map[string]*bsc.Peer),
+		quitCh:    make(chan struct{}),
 	}
 }
 
@@ -234,6 +236,12 @@ func (ps *peerSet) waitSnapExtension(peer *eth.Peer) (*snap.Peer, error) {
 		delete(ps.snapWait, id)
 		ps.lock.Unlock()
 		return nil, errPeerWaitTimeout
+
+	case <-ps.quitCh:
+		ps.lock.Lock()
+		delete(ps.snapWait, id)
+		ps.lock.Unlock()
+		return nil, errPeerSetClosed
 	}
 }
 
@@ -281,7 +289,14 @@ func (ps *peerSet) waitTrustExtension(peer *eth.Peer) (*trust.Peer, error) {
 		delete(ps.trustWait, id)
 		ps.lock.Unlock()
 		return nil, errPeerWaitTimeout
+
+	case <-ps.quitCh:
+		ps.lock.Lock()
+		delete(ps.trustWait, id)
+		ps.lock.Unlock()
+		return nil, errPeerSetClosed
 	}
+
 }
 
 // waitBscExtension blocks until all satellite protocols are connected and tracked
@@ -340,6 +355,12 @@ func (ps *peerSet) waitBscExtension(peer *eth.Peer) (*bsc.Peer, error) {
 				}
 			}
 		}
+
+	case <-ps.quitCh:
+		ps.lock.Lock()
+		delete(ps.bscWait, id)
+		ps.lock.Unlock()
+		return nil, errPeerSetClosed
 	}
 }
 
@@ -523,6 +544,9 @@ func (ps *peerSet) close() {
 
 	for _, p := range ps.peers {
 		p.Disconnect(p2p.DiscQuitting)
+	}
+	if !ps.closed {
+		close(ps.quitCh)
 	}
 	ps.closed = true
 }

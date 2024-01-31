@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/holiman/uint256"
 	"github.com/prometheus/tsdb/fileutil"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -226,7 +227,7 @@ func pruneAll(maindb ethdb.Database, g *core.Genesis) error {
 	}
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(maindb), nil)
 	for addr, account := range g.Alloc {
-		statedb.AddBalance(addr, account.Balance)
+		statedb.AddBalance(addr, uint256.MustFromBig(account.Balance))
 		statedb.SetCode(addr, account.Code)
 		statedb.SetNonce(addr, account.Nonce)
 		for key, value := range account.Storage {
