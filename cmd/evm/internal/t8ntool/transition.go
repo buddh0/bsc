@@ -83,7 +83,7 @@ type input struct {
 func Transition(ctx *cli.Context) error {
 	var getTracer = func(txIndex int, txHash common.Hash) (vm.EVMLogger, error) { return nil, nil }
 
-	baseDir, err = createBasedir(ctx)
+	baseDir, err := createBasedir(ctx)
 	if err != nil {
 		return NewError(ErrorIO, fmt.Errorf("failed creating output basedir: %v", err))
 	}

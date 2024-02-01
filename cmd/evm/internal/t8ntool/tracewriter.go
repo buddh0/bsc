@@ -79,3 +79,7 @@ func (t *traceWriter) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sc
 func (t *traceWriter) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
 	t.inner.CaptureFault(pc, op, gas, cost, scope, depth, err)
 }
+
+func (t *traceWriter) CaptureSystemTxEnd(intrinsicGas uint64) {
+	t.inner.CaptureSystemTxEnd(intrinsicGas)
+}

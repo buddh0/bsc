@@ -193,27 +193,6 @@ func builtinReplace(_ []string, attr slog.Attr, logfmt bool) slog.Attr {
 	return attr
 }
 
-// LvlFromString returns the appropriate Lvl from a string name.
-// Useful for parsing command line args and configuration files.
-func LvlFromString(lvlString string) (slog.Level, error) {
-	switch lvlString {
-	case "trace", "trce":
-		return LevelTrace, nil
-	case "debug", "dbug":
-		return LevelDebug, nil
-	case "info":
-		return LevelInfo, nil
-	case "warn":
-		return LevelWarn, nil
-	case "error", "eror":
-		return LevelError, nil
-	case "crit":
-		return LevelCrit, nil
-	default:
-		return LvlDebug, fmt.Errorf("unknown level: %v", lvlString)
-	}
-}
-
 // RotatingFileHandler returns a handler which writes log records to file chunks
 // at the given path. When a file's size reaches the limit, the handler creates
 // a new file named after the timestamp of the first log record it will contain.
