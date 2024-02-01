@@ -486,7 +486,7 @@ func (sf *subfetcher) loop() {
 	if sf.owner == (common.Hash{}) {
 		trie, err = sf.db.OpenTrie(sf.root)
 	} else {
-		trie, err = sf.db.OpenStorageTrie(sf.state, sf.addr, sf.root)
+		trie, err = sf.db.OpenStorageTrie(sf.state, sf.addr, sf.root, nil)
 	}
 	if err != nil {
 		log.Debug("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
@@ -504,7 +504,7 @@ func (sf *subfetcher) loop() {
 					sf.trie, err = sf.db.OpenTrie(sf.root)
 				} else {
 					// address is useless
-					sf.trie, err = sf.db.OpenStorageTrie(sf.state, sf.addr, sf.root)
+					sf.trie, err = sf.db.OpenStorageTrie(sf.state, sf.addr, sf.root, nil)
 				}
 				if err != nil {
 					continue
