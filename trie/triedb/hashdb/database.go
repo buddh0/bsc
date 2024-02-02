@@ -348,8 +348,6 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	// Keep committing nodes from the flush-list until we're below allowance
 	oldest := db.oldest
 	err := func() error {
-		db.lock.RLock()
-		defer db.lock.RUnlock()
 		for size > limit && oldest != (common.Hash{}) {
 			// Fetch the oldest referenced node and push into the batch
 			node := db.dirties[oldest]
@@ -425,10 +423,8 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	batch := db.diskdb.NewBatch()
 
 	// Move all of the accumulated preimages into a write batch
-	db.lock.RLock()
 	// Move the trie itself into the batch, flushing if enough data is accumulated
 	nodes, storage := len(db.dirties), db.dirtiesSize
-	db.lock.RUnlock()
 
 	uncacher := &cleaner{db}
 	if err := db.commit(node, batch, uncacher); err != nil {
@@ -468,13 +464,10 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 // commit is the private locked version of Commit.
 func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner) error {
 	// If the node does not exist, it's a previously committed node
-	db.lock.RLock()
 	node, ok := db.dirties[hash]
 	if !ok {
-		db.lock.RUnlock()
 		return nil
 	}
-	db.lock.RUnlock()
 
 	var err error
 
