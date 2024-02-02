@@ -366,8 +366,6 @@ func (h *handler) protoTracker() {
 				<-h.handlerDoneCh
 			}
 			return
-		case <-h.stopCh:
-			return
 		}
 	}
 }
