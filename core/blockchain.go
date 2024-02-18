@@ -596,6 +596,9 @@ func (bc *BlockChain) cacheReceipts(hash common.Hash, receipts types.Receipts, b
 	}
 	for i, receipt := range receipts {
 		receipt.EffectiveGasPrice = txs[i].EffectiveGasTipValue(block.BaseFee()) // basefee is supposed to be nil or zero
+		if receipt.Logs == nil {
+			receipt.Logs = []*types.Log{}
+		}
 	}
 
 	bc.receiptsCache.Add(hash, receipts)
