@@ -185,7 +185,6 @@ func TestStorageRangeAt(t *testing.T) {
 	sdb.Finalise(false)
 	sdb.AccountsIntermediateRoot()
 	root, _, _ := sdb.Commit(0, nil)
-	fmt.Println("root", root)
 	sdb, _ = state.New(root, db, nil)
 
 	// Check a few combinations of limit and start/end.
