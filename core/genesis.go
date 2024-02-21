@@ -482,7 +482,6 @@ func (g *Genesis) ToBlock() *types.Block {
 			} else {
 				head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
 			}
-
 		}
 	}
 	var withdrawals []*types.Withdrawal

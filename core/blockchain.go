@@ -1138,7 +1138,6 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 	headBlockGauge.Update(int64(block.NumberU64()))
 	justifiedBlockGauge.Update(int64(bc.GetJustifiedNumber(block.Header())))
 	finalizedBlockGauge.Update(int64(bc.getFinalizedNumber(block.Header())))
-
 }
 
 // stopWithoutSaving stops the blockchain service. If any imports are currently in progress
