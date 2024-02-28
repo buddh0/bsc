@@ -418,6 +418,11 @@ func (bc *BlockChain) Genesis() *types.Block {
 	return bc.genesisBlock
 }
 
+// GenesisHeader retrieves the chain's genesis block header.
+func (bc *BlockChain) GenesisHeader() *types.Header {
+	return bc.genesisBlock.Header()
+}
+
 // TxIndexProgress returns the transaction indexing progress.
 func (bc *BlockChain) TxIndexProgress() (TxIndexProgress, error) {
 	if bc.txIndexer == nil {
