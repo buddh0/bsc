@@ -322,7 +322,7 @@ func (bc *BlockChain) GetTd(hash common.Hash, number uint64) *big.Int {
 
 // HasState checks if state trie is fully present in the database or not.
 func (bc *BlockChain) HasState(hash common.Hash) bool {
-	if bc.stateCache.NoTries() {
+	if bc.NoTries() {
 		return bc.snaps != nil && bc.snaps.Snapshot(hash) != nil
 	}
 	if bc.pipeCommit && bc.snaps != nil {
