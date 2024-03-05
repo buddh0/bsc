@@ -221,6 +221,7 @@ type NewBlockPacket struct {
 	Sidecars types.BlobSidecars `rlp:"optional"`
 }
 
+<<<<<<< HEAD
 // sanityCheck verifies that the values are reasonable, as a DoS protection
 func (request *NewBlockPacket) sanityCheck() error {
 	if err := request.Block.SanityCheck(); err != nil {
@@ -243,6 +244,8 @@ func (request *NewBlockPacket) sanityCheck() error {
 	return nil
 }
 
+=======
+>>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 // GetBlockBodiesRequest represents a block body query.
 type GetBlockBodiesRequest []common.Hash
 

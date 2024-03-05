@@ -19,7 +19,6 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"math/big"
 	"sync"
 	"time"
 
@@ -433,6 +432,7 @@ func (ps *peerSet) peer(id string) *ethPeer {
 	return ps.peers[id]
 }
 
+<<<<<<< HEAD
 // headPeers retrieves a specified number list of peers.
 func (ps *peerSet) headPeers(num uint) []*ethPeer {
 	ps.lock.RLock()
@@ -467,6 +467,8 @@ func (ps *peerSet) peersWithoutBlock(hash common.Hash) []*ethPeer {
 	return list
 }
 
+=======
+>>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 // peersWithoutTransaction retrieves a list of peers that do not have a given
 // transaction in their set of known hashes.
 func (ps *peerSet) peersWithoutTransaction(hash common.Hash) []*ethPeer {
@@ -515,6 +517,7 @@ func (ps *peerSet) snapLen() int {
 	return ps.snapPeers
 }
 
+<<<<<<< HEAD
 // peerWithHighestTD retrieves the known peer with the currently highest total
 // difficulty, but below the given PoS switchover threshold.
 func (ps *peerSet) peerWithHighestTD() *eth.Peer {
@@ -536,6 +539,8 @@ func (ps *peerSet) peerWithHighestTD() *eth.Peer {
 	return bestPeer
 }
 
+=======
+>>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 // close disconnects all peers.
 func (ps *peerSet) close() {
 	ps.lock.Lock()

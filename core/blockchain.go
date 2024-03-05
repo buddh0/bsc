@@ -56,7 +56,6 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
-	"golang.org/x/exp/slices"
 )
 
 var (
@@ -110,6 +109,7 @@ var (
 )
 
 const (
+<<<<<<< HEAD
 	bodyCacheLimit      = 256
 	blockCacheLimit     = 256
 	diffLayerCacheLimit = 1024
@@ -127,6 +127,13 @@ const (
 	maxDiffForkDist                 = 11 // Maximum allowed backward distance from the chain head
 
 	rewindBadBlockInterval = 1 * time.Second
+=======
+	bodyCacheLimit     = 256
+	blockCacheLimit    = 256
+	receiptsCacheLimit = 32
+	txLookupCacheLimit = 1024
+	TriesInMemory      = 128
+>>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -292,6 +299,7 @@ type BlockChain struct {
 	txLookupCache *lru.Cache[common.Hash, txLookup]
 	sidecarsCache *lru.Cache[common.Hash, types.BlobSidecars]
 
+<<<<<<< HEAD
 	// future blocks are blocks added for later processing
 	futureBlocks *lru.Cache[common.Hash, *types.Block]
 	// Cache for the blocks that failed to pass MPT root verification
@@ -304,6 +312,8 @@ type BlockChain struct {
 	diffQueueBuffer            chan *types.DiffLayer
 	diffLayerFreezerBlockLimit uint64
 
+=======
+>>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 	wg            sync.WaitGroup
 	dbWg          sync.WaitGroup
 	quit          chan struct{} // shutdown signal, closed in Stop.
@@ -363,6 +373,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	*/
 
 	bc := &BlockChain{
+<<<<<<< HEAD
 		chainConfig:        chainConfig,
 		cacheConfig:        cacheConfig,
 		db:                 db,
@@ -385,6 +396,22 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		vmConfig:           vmConfig,
 		diffQueue:          prque.New[int64, *types.DiffLayer](nil),
 		diffQueueBuffer:    make(chan *types.DiffLayer),
+=======
+		chainConfig:   chainConfig,
+		cacheConfig:   cacheConfig,
+		db:            db,
+		triedb:        triedb,
+		triegc:        prque.New[int64, common.Hash](nil),
+		quit:          make(chan struct{}),
+		chainmu:       syncx.NewClosableMutex(),
+		bodyCache:     lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
+		bodyRLPCache:  lru.NewCache[common.Hash, rlp.RawValue](bodyCacheLimit),
+		receiptsCache: lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
+		blockCache:    lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
+		txLookupCache: lru.NewCache[common.Hash, txLookup](txLookupCacheLimit),
+		engine:        engine,
+		vmConfig:      vmConfig,
+>>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 	}
 	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
 	bc.forker = NewForkChoice(bc, shouldPreserve)
@@ -550,6 +577,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			return nil, err
 		}
 	}
+<<<<<<< HEAD
 	// Start future block processor.
 	bc.wg.Add(1)
 	go bc.updateFutureBlocks()
@@ -570,6 +598,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		go bc.startDoubleSignMonitor()
 	}
 
+=======
+>>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
@@ -1157,7 +1187,6 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	bc.sidecarsCache.Purge()
 	bc.blockCache.Purge()
 	bc.txLookupCache.Purge()
-	bc.futureBlocks.Purge()
 
 	if finalized := bc.CurrentFinalBlock(); finalized != nil && head < finalized.Number.Uint64() {
 		log.Error("SetHead invalidated finalized block")
@@ -1443,24 +1472,6 @@ func (bc *BlockChain) StopInsert() {
 // insertStopped returns true after StopInsert has been called.
 func (bc *BlockChain) insertStopped() bool {
 	return bc.procInterrupt.Load()
-}
-
-func (bc *BlockChain) procFutureBlocks() {
-	blocks := make([]*types.Block, 0, bc.futureBlocks.Len())
-	for _, hash := range bc.futureBlocks.Keys() {
-		if block, exist := bc.futureBlocks.Peek(hash); exist {
-			blocks = append(blocks, block)
-		}
-	}
-	if len(blocks) > 0 {
-		slices.SortFunc(blocks, func(a, b *types.Block) int {
-			return a.Number().Cmp(b.Number())
-		})
-		// Insert one by one as chain insertion needs contiguous ancestry between blocks
-		for i := range blocks {
-			bc.InsertChain(blocks[i : i+1])
-		}
-	}
 }
 
 // WriteStatus status of write
@@ -1959,8 +1970,6 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 	if status == CanonStatTy {
 		bc.writeHeadBlock(block)
 	}
-	bc.futureBlocks.Remove(block.Hash())
-
 	if status == CanonStatTy {
 		bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 		if len(logs) > 0 {
@@ -1987,25 +1996,6 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
 	return status, nil
-}
-
-// addFutureBlock checks if the block is within the max allowed window to get
-// accepted for future processing, and returns an error if the block is too far
-// ahead and was not added.
-//
-// TODO after the transition, the future block shouldn't be kept. Because
-// it's not checked in the Geth side anymore.
-func (bc *BlockChain) addFutureBlock(block *types.Block) error {
-	max := uint64(time.Now().Unix() + maxTimeFutureBlocks)
-	if block.Time() > max {
-		return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)
-	}
-	if block.Difficulty().Cmp(common.Big0) == 0 {
-		// Never add PoS blocks into the future queue
-		return nil
-	}
-	bc.futureBlocks.Add(block.Hash(), block)
-	return nil
 }
 
 // InsertChain attempts to insert the given batch of blocks in to the canonical
@@ -2162,26 +2152,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			_, err := bc.recoverAncestors(block)
 			return it.index, err
 		}
-	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
-	case errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash())):
-		for block != nil && (it.index == 0 || errors.Is(err, consensus.ErrUnknownAncestor)) {
-			log.Debug("Future block, postponing import", "number", block.Number(), "hash", block.Hash())
-			if err := bc.addFutureBlock(block); err != nil {
-				return it.index, err
-			}
-			block, err = it.next()
-		}
-		stats.queued += it.processed()
-		stats.ignored += it.remaining()
-
-		// If there are any still remaining, mark as ignored
-		return it.index, err
-
 	// Some other error(except ErrKnownBlock) occurred, abort.
 	// ErrKnownBlock is allowed here since some known blocks
 	// still need re-execution to generate snapshots that are missing
 	case err != nil && !errors.Is(err, ErrKnownBlock):
-		bc.futureBlocks.Remove(block.Hash())
 		stats.ignored += len(it.chain)
 		bc.reportBlock(block, nil, err)
 		return it.index, err
@@ -2380,23 +2354,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		}
 		bc.chainBlockFeed.Send(ChainHeadEvent{block})
 	}
-
-	// Any blocks remaining here? The only ones we care about are the future ones
-	if block != nil && errors.Is(err, consensus.ErrFutureBlock) {
-		if err := bc.addFutureBlock(block); err != nil {
-			return it.index, err
-		}
-		block, err = it.next()
-
-		for ; block != nil && errors.Is(err, consensus.ErrUnknownAncestor); block, err = it.next() {
-			if err := bc.addFutureBlock(block); err != nil {
-				return it.index, err
-			}
-			stats.queued++
-		}
-	}
 	stats.ignored += it.remaining()
-
 	return it.index, err
 }
 
@@ -2875,6 +2833,7 @@ func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 	return head.Hash(), nil
 }
 
+<<<<<<< HEAD
 func (bc *BlockChain) updateFutureBlocks() {
 	futureTimer := time.NewTicker(5 * time.Second)
 	defer futureTimer.Stop()
@@ -3001,6 +2960,8 @@ func (bc *BlockChain) startDoubleSignMonitor() {
 	}
 }
 
+=======
+>>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 // skipBlock returns 'true', if the block being imported can be skipped over, meaning
 // that the block does not need to be processed but can be considered already fully 'done'.
 func (bc *BlockChain) skipBlock(err error, it *insertIterator) bool {

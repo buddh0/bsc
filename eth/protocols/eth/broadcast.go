@@ -17,8 +17,6 @@
 package eth
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/gopool"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -30,6 +28,7 @@ const (
 	maxTxPacketSize = 100 * 1024
 )
 
+<<<<<<< HEAD
 // blockPropagation is a block propagation event, waiting for its turn in the
 // broadcast queue.
 type blockPropagation struct {
@@ -61,6 +60,8 @@ func (p *Peer) broadcastBlocks() {
 	}
 }
 
+=======
+>>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 // broadcastTransactions is a write loop that schedules transaction broadcasts
 // to the remote peer. The goal is to have an async writer that does not lock up
 // node internals and at the same time rate limits queued data.

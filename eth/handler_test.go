@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -192,8 +191,11 @@ func newTestHandlerWithBlocks(blocks int) *testHandler {
 		Database:   db,
 		Chain:      chain,
 		TxPool:     txpool,
+<<<<<<< HEAD
 		Merger:     consensus.NewMerger(rawdb.NewMemoryDatabase()),
 		VotePool:   votepool,
+=======
+>>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 		Network:    1,
 		Sync:       downloader.SnapSync,
 		BloomCache: 1,
