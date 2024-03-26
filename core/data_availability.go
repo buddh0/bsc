@@ -75,7 +75,7 @@ func IsDataAvailable(chain consensus.ChainHeaderReader, block *types.Block) (err
 
 	sidecars := block.Sidecars()
 	for _, s := range sidecars {
-		if err := s.SanityCheck(block.Number(), block.Hash()); err != nil {
+		if err = s.SanityCheck(block.Number(), block.Hash()); err != nil {
 			return err
 		}
 	}
@@ -90,7 +90,8 @@ func IsDataAvailable(chain consensus.ChainHeaderReader, block *types.Block) (err
 		blobTxIndexes = append(blobTxIndexes, uint64(i))
 	}
 	if len(blobTxs) != len(sidecars) {
-		return fmt.Errorf("blob info mismatch: sidecars %d, versionedHashes:%d", len(sidecars), len(blobTxs))
+		err = fmt.Errorf("blob info mismatch: sidecars %d, versionedHashes:%d", len(sidecars), len(blobTxs))
+		return
 	}
 
 	// check blob amount
@@ -99,19 +100,22 @@ func IsDataAvailable(chain consensus.ChainHeaderReader, block *types.Block) (err
 		blobCnt += len(s.Blobs)
 	}
 	if blobCnt > params.MaxBlobGasPerBlock/params.BlobTxBlobGasPerBlob {
-		return fmt.Errorf("too many blobs in block: have %d, permitted %d", blobCnt, params.MaxBlobGasPerBlock/params.BlobTxBlobGasPerBlob)
+		err = fmt.Errorf("too many blobs in block: have %d, permitted %d", blobCnt, params.MaxBlobGasPerBlock/params.BlobTxBlobGasPerBlob)
+		return
 	}
 
 	// check blob and versioned hash
 	for i, tx := range blobTxs {
 		// check sidecar tx related
 		if sidecars[i].TxHash != tx.Hash() {
-			return fmt.Errorf("sidecar's TxHash mismatch with expected transaction, want: %v, have: %v", sidecars[i].TxHash, tx.Hash())
+			err = fmt.Errorf("sidecar's TxHash mismatch with expected transaction, want: %v, have: %v", sidecars[i].TxHash, tx.Hash())
+			return
 		}
 		if sidecars[i].TxIndex != blobTxIndexes[i] {
-			return fmt.Errorf("sidecar's TxIndex mismatch with expected transaction, want: %v, have: %v", sidecars[i].TxIndex, blobTxIndexes[i])
+			err = fmt.Errorf("sidecar's TxIndex mismatch with expected transaction, want: %v, have: %v", sidecars[i].TxIndex, blobTxIndexes[i])
+			return
 		}
-		if err := validateBlobSidecar(tx.BlobHashes(), sidecars[i]); err != nil {
+		if err = validateBlobSidecar(tx.BlobHashes(), sidecars[i]); err != nil {
 			return err
 		}
 	}
