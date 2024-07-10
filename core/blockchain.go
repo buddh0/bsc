@@ -53,6 +53,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
@@ -259,17 +260,18 @@ type BlockChain struct {
 	triesInMemory uint64
 	txIndexer     *txIndexer // Transaction indexer, might be nil if not enabled
 
-	hc                  *HeaderChain
-	rmLogsFeed          event.Feed
-	chainFeed           event.Feed
-	chainSideFeed       event.Feed
-	chainHeadFeed       event.Feed
-	chainBlockFeed      event.Feed
-	logsFeed            event.Feed
-	blockProcFeed       event.Feed
-	finalizedHeaderFeed event.Feed
-	scope               event.SubscriptionScope
-	genesisBlock        *types.Block
+	hc                        *HeaderChain
+	rmLogsFeed                event.Feed
+	chainFeed                 event.Feed
+	chainSideFeed             event.Feed
+	chainHeadFeed             event.Feed
+	chainBlockFeed            event.Feed
+	logsFeed                  event.Feed
+	blockProcFeed             event.Feed
+	finalizedHeaderFeed       event.Feed
+	highestVerifiedHeaderFeed event.Feed
+	scope                     event.SubscriptionScope
+	genesisBlock              *types.Block
 
 	// This mutex synchronizes chain write operations.
 	// Readers don't need to take it, they can just read the database.
@@ -1962,6 +1964,7 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 			}
 		}
 		if emitHeadEvent {
+			bc.highestVerifiedHeaderFeed.Send(HighestVerifiedHeaderEvent{Header: block.Header()})
 			bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 			if finalizedHeader != nil {
 				bc.finalizedHeaderFeed.Send(FinalizedHeaderEvent{finalizedHeader})
@@ -2266,11 +2269,21 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 
 		// Validate the state using the default validator
 		vstart := time.Now()
-		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
-			log.Error("validate state failed", "error", err)
-			bc.reportBlock(block, receipts, err)
-			statedb.StopPrefetcher()
-			return it.index, err
+		bohr := bc.chainConfig.IsBohr(block.Number(), block.Time())
+		if !bohr {
+			if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
+				log.Error("validate state failed", "error", err)
+				bc.reportBlock(block, receipts, err)
+				statedb.StopPrefetcher()
+				return it.index, err
+			}
+		} else {
+			if err := bc.fillStateFields(block, statedb, receipts, usedGas); err != nil {
+				log.Error("fill state failed", "error", err)
+				bc.reportBlock(block, receipts, err)
+				statedb.StopPrefetcher()
+				return it.index, err
+			}
 		}
 		vtime := time.Since(vstart)
 		proctime := time.Since(start) // processing + validation
@@ -2391,6 +2404,7 @@ func (bc *BlockChain) updateHighestVerifiedHeader(header *types.Header) {
 	reorg, err := bc.forker.ReorgNeededWithFastFinality(currentBlock, header)
 	if err == nil && reorg {
 		bc.highestVerifiedHeader.Store(types.CopyHeader(header))
+		bc.highestVerifiedHeaderFeed.Send(HighestVerifiedHeaderEvent{Header: header})
 		log.Trace("updateHighestVerifiedHeader", "number", header.Number.Uint64(), "hash", header.Hash())
 	}
 }
@@ -3252,4 +3266,58 @@ func (bc *BlockChain) SetTrieFlushInterval(interval time.Duration) {
 // GetTrieFlushInterval gets the in-memory tries flushAlloc interval
 func (bc *BlockChain) GetTrieFlushInterval() time.Duration {
 	return time.Duration(bc.flushInterval.Load())
+}
+
+func (bc *BlockChain) fillStateFields(block *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas uint64) error {
+	header := block.Header()
+	if block.GasUsed() != usedGas {
+		log.Error("invalid gasUsed", "remote", block.GasUsed(), "local", usedGas)
+		header.GasUsed = usedGas
+	}
+	CheckAndFillFuns := []func() error{
+		func() error {
+			rbloom := types.CreateBloom(receipts)
+			if rbloom != header.Bloom {
+				log.Error("invalid logsBloom", "remote", header.Bloom, "local", rbloom)
+				header.Bloom = rbloom
+			}
+			return nil
+		},
+		func() error {
+			receiptSha := types.DeriveSha(receipts, trie.NewStackTrie(nil))
+			if receiptSha != header.ReceiptHash {
+				log.Error("invalid receiptsRoot", "remote", header.ReceiptHash, "local", receiptSha)
+				header.ReceiptHash = receiptSha
+			}
+			return nil
+		},
+		func() error {
+			if root := statedb.IntermediateRoot(bc.chainConfig.IsEIP158(header.Number)); header.Root != root {
+				if statedb.Error() != nil {
+					return fmt.Errorf("invalid stateRoott dberr: %w", statedb.Error())
+				} else {
+					log.Error("invalid stateRoot", "remote", header.Root, "local", root)
+					header.Root = root
+				}
+			}
+			return nil
+		},
+	}
+
+	CheckAndFillRes := make(chan error, len(CheckAndFillFuns))
+	for _, f := range CheckAndFillFuns {
+		tmpFunc := f
+		go func() {
+			CheckAndFillRes <- tmpFunc()
+		}()
+	}
+
+	var err error
+	for i := 0; i < len(CheckAndFillFuns); i++ {
+		r := <-CheckAndFillRes
+		if r != nil && err == nil {
+			err = r
+		}
+	}
+	return err
 }

@@ -31,8 +31,8 @@ type VoteManager struct {
 
 	chain *core.BlockChain
 
-	chainHeadCh  chan core.ChainHeadEvent
-	chainHeadSub event.Subscription
+	highestVerifiedHeaderCh  chan core.HighestVerifiedHeaderEvent
+	highestVerifiedHeaderSub event.Subscription
 
 	// used for backup validators to sync votes from corresponding mining validator
 	syncVoteCh  chan core.NewVoteEvent
@@ -47,12 +47,12 @@ type VoteManager struct {
 
 func NewVoteManager(eth Backend, chain *core.BlockChain, pool *VotePool, journalPath, blsPasswordPath, blsWalletPath string, engine consensus.PoSA) (*VoteManager, error) {
 	voteManager := &VoteManager{
-		eth:         eth,
-		chain:       chain,
-		chainHeadCh: make(chan core.ChainHeadEvent, chainHeadChanSize),
-		syncVoteCh:  make(chan core.NewVoteEvent, voteBufferForPut),
-		pool:        pool,
-		engine:      engine,
+		eth:                     eth,
+		chain:                   chain,
+		highestVerifiedHeaderCh: make(chan core.HighestVerifiedHeaderEvent, highestVerifiedHeaderChanSize),
+		syncVoteCh:              make(chan core.NewVoteEvent, voteBufferForPut),
+		pool:                    pool,
+		engine:                  engine,
 	}
 
 	// Create voteSigner.
@@ -72,7 +72,7 @@ func NewVoteManager(eth Backend, chain *core.BlockChain, pool *VotePool, journal
 	voteManager.journal = voteJournal
 
 	// Subscribe to chain head event.
-	voteManager.chainHeadSub = voteManager.chain.SubscribeChainHeadEvent(voteManager.chainHeadCh)
+	voteManager.highestVerifiedHeaderSub = voteManager.chain.SubscribeHighestVerifiedHeaderEvent(voteManager.highestVerifiedHeaderCh)
 	voteManager.syncVoteSub = voteManager.pool.SubscribeNewVoteEvent(voteManager.syncVoteCh)
 
 	go voteManager.loop()
@@ -82,7 +82,7 @@ func NewVoteManager(eth Backend, chain *core.BlockChain, pool *VotePool, journal
 
 func (voteManager *VoteManager) loop() {
 	log.Debug("vote manager routine loop started")
-	defer voteManager.chainHeadSub.Unsubscribe()
+	defer voteManager.highestVerifiedHeaderSub.Unsubscribe()
 	defer voteManager.syncVoteSub.Unsubscribe()
 
 	events := voteManager.eth.EventMux().Subscribe(downloader.StartEvent{}, downloader.DoneEvent{}, downloader.FailedEvent{})
@@ -117,7 +117,7 @@ func (voteManager *VoteManager) loop() {
 				log.Debug("downloader is in DoneEvent mode, set the startVote flag to true")
 				startVote = true
 			}
-		case cHead := <-voteManager.chainHeadCh:
+		case cHead := <-voteManager.highestVerifiedHeaderCh:
 			if !startVote {
 				log.Debug("startVote flag is false, continue")
 				continue
@@ -133,12 +133,12 @@ func (voteManager *VoteManager) loop() {
 				continue
 			}
 
-			if cHead.Block == nil {
-				log.Debug("cHead.Block is nil, continue")
+			if cHead.Header == nil {
+				log.Debug("cHead.Header is nil, continue")
 				continue
 			}
 
-			curHead := cHead.Block.Header()
+			curHead := cHead.Header
 			// Check if cur validator is within the validatorSet at curHead
 			if !voteManager.engine.IsActiveValidatorAt(voteManager.chain, curHead,
 				func(bLSPublicKey *types.BLSPublicKey) bool {
@@ -206,7 +206,7 @@ func (voteManager *VoteManager) loop() {
 		case <-voteManager.syncVoteSub.Err():
 			log.Debug("voteManager subscribed votes failed")
 			return
-		case <-voteManager.chainHeadSub.Err():
+		case <-voteManager.highestVerifiedHeaderSub.Err():
 			log.Debug("voteManager subscribed chainHead failed")
 			return
 		}

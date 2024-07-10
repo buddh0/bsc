@@ -446,6 +446,10 @@ func (g *Genesis) ToBlock() *types.Block {
 			// by definition.
 			if conf.Parlia == nil || conf.IsBohr(num, g.Timestamp) {
 				head.ParentBeaconRoot = new(common.Hash)
+				head.ParentRoot = nil
+				head.ParentReceiptHash = nil
+				head.ParentBloom = nil
+				head.ParentGasUsed = nil
 			}
 
 			// EIP-4844 fields

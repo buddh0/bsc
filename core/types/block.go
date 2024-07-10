@@ -30,6 +30,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -121,6 +122,11 @@ type Header struct {
 
 	// ParentBeaconRoot was added by EIP-4788 and is ignored in legacy headers.
 	ParentBeaconRoot *common.Hash `json:"parentBeaconBlockRoot" rlp:"optional"`
+
+	ParentRoot        *common.Hash `json:"parentStateRoot" rlp:"optional"`
+	ParentReceiptHash *common.Hash `json:"parentReceiptsRoot" rlp:"optional"`
+	ParentBloom       *Bloom       `json:"parentLogsBloom" rlp:"optional"`
+	ParentGasUsed     *uint64      `json:"parentGasUsed" rlp:"optional"`
 }
 
 // field type overrides for gencodec
@@ -140,7 +146,7 @@ type headerMarshaling struct {
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
 // RLP encoding.
 func (h *Header) Hash() common.Hash {
-	return rlpHash(h)
+	return rlpForBlockHash(h)
 }
 
 var headerSize = common.StorageSize(reflect.TypeOf(Header{}).Size())
@@ -708,6 +714,10 @@ func EncodeSigHeader(w io.Writer, header *Header, chainId *big.Int) {
 			header.BlobGasUsed,
 			header.ExcessBlobGas,
 			header.ParentBeaconRoot,
+			header.ParentRoot,
+			header.ParentReceiptHash,
+			header.ParentBloom,
+			header.ParentGasUsed,
 		})
 	} else {
 		err = rlp.Encode(w, []interface{}{
@@ -731,5 +741,43 @@ func EncodeSigHeader(w io.Writer, header *Header, chainId *big.Int) {
 	}
 	if err != nil {
 		panic("can't encode: " + err.Error())
+	}
+}
+
+func rlpForBlockHash(header *Header) (h common.Hash) {
+	if header.ParentBeaconRoot != nil && *header.ParentBeaconRoot == (common.Hash{}) {
+		sha := hasherPool.Get().(crypto.KeccakState)
+		defer hasherPool.Put(sha)
+		sha.Reset()
+		rlp.Encode(sha, []interface{}{
+			header.ParentHash,
+			header.UncleHash,
+			header.Coinbase,
+			// header.Root,
+			header.TxHash,
+			// header.ReceiptHash,
+			// header.Bloom,
+			header.Difficulty,
+			header.Number,
+			header.GasLimit,
+			// header.GasUsed,
+			header.Time,
+			header.Extra,
+			header.MixDigest,
+			header.Nonce,
+			header.BaseFee,
+			header.WithdrawalsHash,
+			header.BlobGasUsed,
+			header.ExcessBlobGas,
+			header.ParentBeaconRoot,
+			header.ParentRoot,
+			header.ParentReceiptHash,
+			header.ParentBloom,
+			header.ParentGasUsed,
+		})
+		sha.Read(h[:])
+		return h
+	} else {
+		return rlpHash(header)
 	}
 }

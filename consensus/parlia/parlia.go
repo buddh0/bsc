@@ -619,9 +619,43 @@ func (p *Parlia) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 		if header.ParentBeaconRoot != nil {
 			return fmt.Errorf("invalid parentBeaconRoot, have %#x, expected nil", header.ParentBeaconRoot)
 		}
+		if header.ParentRoot != nil {
+			return fmt.Errorf("invalid ParentRoot, have %#x, expected nil", header.ParentRoot)
+		}
+		if header.ParentReceiptHash != nil {
+			return fmt.Errorf("invalid ParentReceiptHash, have %#x, expected nil", header.ParentReceiptHash)
+		}
+		if header.ParentBloom != nil {
+			return fmt.Errorf("invalid ParentBloom, have %#x, expected nil", header.ParentBloom)
+		}
+		if header.ParentGasUsed != nil {
+			return fmt.Errorf("invalid ParentGasUsed, have %#x, expected nil", header.ParentGasUsed)
+		}
 	} else {
-		if header.ParentBeaconRoot == nil || *header.ParentBeaconRoot != (common.Hash{}) {
-			return fmt.Errorf("invalid parentBeaconRoot, have %#x, expected zero hash", header.ParentBeaconRoot)
+		if header.ParentBeaconRoot == nil {
+			return fmt.Errorf("invalid parentBeaconRoot, have nil, expected %s", common.Hash{})
+		} else if *header.ParentBeaconRoot != (common.Hash{}) {
+			return fmt.Errorf("invalid parentBeaconRoot, have %s, expected %s", *header.ParentBeaconRoot, common.Hash{})
+		}
+		if header.ParentRoot == nil {
+			return fmt.Errorf("invalid ParentRoot,  have nil, expected %s", parent.Root)
+		} else if *header.ParentRoot != parent.Root {
+			return fmt.Errorf("invalid ParentRoot,  have %s, expected %s", *header.ParentRoot, parent.Root)
+		}
+		if header.ParentReceiptHash == nil {
+			return fmt.Errorf("invalid ParentReceiptHash,  have nil, expected %s", parent.ReceiptHash)
+		} else if *header.ParentRoot != parent.Root {
+			return fmt.Errorf("invalid ParentReceiptHash,  have %s, expected %s", *header.ParentReceiptHash, parent.ReceiptHash)
+		}
+		if header.ParentBloom == nil {
+			return fmt.Errorf("invalid ParentBloom,  have nil, expected %s", parent.Bloom)
+		} else if *header.ParentRoot != parent.Root {
+			return fmt.Errorf("invalid ParentBloom,  have %s, expected %s", *header.ParentBloom, parent.Bloom)
+		}
+		if header.ParentGasUsed == nil {
+			return fmt.Errorf("invalid ParentGasUsed,  have nil, expected %d", parent.GasUsed)
+		} else if *header.ParentGasUsed != parent.GasUsed {
+			return fmt.Errorf("invalid ParentGasUsed,  have %d, expected %d", *header.ParentGasUsed, parent.GasUsed)
 		}
 	}
 

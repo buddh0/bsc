@@ -42,7 +42,11 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 	_tmp3 := obj.BlobGasUsed != nil
 	_tmp4 := obj.ExcessBlobGas != nil
 	_tmp5 := obj.ParentBeaconRoot != nil
-	if _tmp1 || _tmp2 || _tmp3 || _tmp4 || _tmp5 {
+	_tmp6 := obj.ParentRoot != nil
+	_tmp7 := obj.ParentReceiptHash != nil
+	_tmp8 := obj.ParentBloom != nil
+	_tmp9 := obj.ParentGasUsed != nil
+	if _tmp1 || _tmp2 || _tmp3 || _tmp4 || _tmp5 || _tmp6 || _tmp7 || _tmp8 || _tmp9 {
 		if obj.BaseFee == nil {
 			w.Write(rlp.EmptyString)
 		} else {
@@ -52,32 +56,60 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 			w.WriteBigInt(obj.BaseFee)
 		}
 	}
-	if _tmp2 || _tmp3 || _tmp4 || _tmp5 {
+	if _tmp2 || _tmp3 || _tmp4 || _tmp5 || _tmp6 || _tmp7 || _tmp8 || _tmp9 {
 		if obj.WithdrawalsHash == nil {
 			w.Write([]byte{0x80})
 		} else {
 			w.WriteBytes(obj.WithdrawalsHash[:])
 		}
 	}
-	if _tmp3 || _tmp4 || _tmp5 {
+	if _tmp3 || _tmp4 || _tmp5 || _tmp6 || _tmp7 || _tmp8 || _tmp9 {
 		if obj.BlobGasUsed == nil {
 			w.Write([]byte{0x80})
 		} else {
 			w.WriteUint64((*obj.BlobGasUsed))
 		}
 	}
-	if _tmp4 || _tmp5 {
+	if _tmp4 || _tmp5 || _tmp6 || _tmp7 || _tmp8 || _tmp9 {
 		if obj.ExcessBlobGas == nil {
 			w.Write([]byte{0x80})
 		} else {
 			w.WriteUint64((*obj.ExcessBlobGas))
 		}
 	}
-	if _tmp5 {
+	if _tmp5 || _tmp6 || _tmp7 || _tmp8 || _tmp9 {
 		if obj.ParentBeaconRoot == nil {
 			w.Write([]byte{0x80})
 		} else {
 			w.WriteBytes(obj.ParentBeaconRoot[:])
+		}
+	}
+	if _tmp6 || _tmp7 || _tmp8 || _tmp9 {
+		if obj.ParentRoot == nil {
+			w.Write([]byte{0x80})
+		} else {
+			w.WriteBytes(obj.ParentRoot[:])
+		}
+	}
+	if _tmp7 || _tmp8 || _tmp9 {
+		if obj.ParentReceiptHash == nil {
+			w.Write([]byte{0x80})
+		} else {
+			w.WriteBytes(obj.ParentReceiptHash[:])
+		}
+	}
+	if _tmp8 || _tmp9 {
+		if obj.ParentBloom == nil {
+			w.Write([]byte{0x80})
+		} else {
+			w.WriteBytes(obj.ParentBloom[:])
+		}
+	}
+	if _tmp9 {
+		if obj.ParentGasUsed == nil {
+			w.Write([]byte{0x80})
+		} else {
+			w.WriteUint64((*obj.ParentGasUsed))
 		}
 	}
 	w.ListEnd(_tmp0)

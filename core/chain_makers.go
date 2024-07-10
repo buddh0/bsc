@@ -488,6 +488,10 @@ func (cm *chainMaker) makeHeader(parent *types.Block, state *state.StateDB, engi
 		}
 		if cm.config.Parlia == nil || cm.config.IsBohr(header.Number, header.Time) {
 			header.ParentBeaconRoot = new(common.Hash)
+			header.ParentRoot = &parent.Header().Root
+			header.ParentReceiptHash = &parent.Header().ReceiptHash
+			header.ParentBloom = &parent.Header().Bloom
+			header.ParentGasUsed = &parent.Header().GasUsed
 		}
 	}
 	return header
