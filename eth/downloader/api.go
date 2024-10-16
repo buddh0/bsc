@@ -150,8 +150,6 @@ func (api *DownloaderAPI) Syncing(ctx context.Context) (*rpc.Subscription, error
 				notifier.Notify(rpcSub.ID, status)
 			case <-rpcSub.Err():
 				return
-			case <-notifier.Closed():
-				return
 			}
 		}
 	})
