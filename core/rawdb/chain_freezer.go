@@ -52,7 +52,6 @@ var (
 // database to flat files for saving space on live database.
 type chainFreezer struct {
 	threshold atomic.Uint64 // Number of recent blocks not to freeze (params.FullImmutabilityThreshold apart from tests)
-
 	*Freezer
 	quit    chan struct{}
 	wg      sync.WaitGroup
@@ -531,7 +530,6 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 		}
 		return nil
 	})
-
 	return hashes, err
 }
 

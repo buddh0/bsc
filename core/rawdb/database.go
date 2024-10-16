@@ -163,6 +163,7 @@ func (frdb *freezerdb) Freeze(threshold uint64) error {
 		frdb.AncientStore.(*chainFreezer).threshold.Store(old)
 	}(frdb.AncientStore.(*chainFreezer).threshold.Load())
 	frdb.AncientStore.(*chainFreezer).threshold.Store(threshold)
+
 	// Trigger a freeze cycle and block until it's done
 	trigger := make(chan struct{}, 1)
 	frdb.AncientStore.(*chainFreezer).trigger <- trigger
@@ -1213,8 +1214,8 @@ func DeleteTrieState(db ethdb.Database) error {
 	)
 
 	prefixKeys := map[string]func([]byte) bool{
-		string(trieNodeAccountPrefix): IsAccountTrieNode,
-		string(trieNodeStoragePrefix): IsStorageTrieNode,
+		string(TrieNodeAccountPrefix): IsAccountTrieNode,
+		string(TrieNodeStoragePrefix): IsStorageTrieNode,
 		string(stateIDPrefix):         func(key []byte) bool { return len(key) == len(stateIDPrefix)+common.HashLength },
 	}
 
