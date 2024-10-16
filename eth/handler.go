@@ -26,6 +26,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/monitor"
@@ -112,7 +114,6 @@ type votePool interface {
 // handlerConfig is the collection of initialization parameters to create a full
 // node network handler.
 type handlerConfig struct {
-<<<<<<< HEAD
 	NodeID                 enode.ID         // P2P node ID used for tx propagation topology
 	Database               ethdb.Database   // Database for direct sync insertions
 	Chain                  *core.BlockChain // Blockchain to serve data from
@@ -127,17 +128,6 @@ type handlerConfig struct {
 	DirectBroadcast        bool
 	DisablePeerTxBroadcast bool
 	PeerSet                *peerSet
-=======
-	NodeID         enode.ID               // P2P node ID used for tx propagation topology
-	Database       ethdb.Database         // Database for direct sync insertions
-	Chain          *core.BlockChain       // Blockchain to serve data from
-	TxPool         txPool                 // Transaction pool to propagate from
-	Network        uint64                 // Network identifier to advertise
-	Sync           downloader.SyncMode    // Whether to snap or full sync
-	BloomCache     uint64                 // Megabytes to alloc for snap sync bloom
-	EventMux       *event.TypeMux         // Legacy event mux, deprecate for `feed`
-	RequiredBlocks map[uint64]common.Hash // Hard coded map of required block hashes for sync challenges
->>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 }
 
 type handler struct {
@@ -160,11 +150,12 @@ type handler struct {
 	peersPerIP           map[string]int
 	peerPerIPLock        sync.Mutex
 
-	downloader *downloader.Downloader
-	txFetcher  *fetcher.TxFetcher
-	peers      *peerSet
+	downloader   *downloader.Downloader
+	blockFetcher *fetcher.BlockFetcher
+	txFetcher    *fetcher.TxFetcher
+	peers        *peerSet
+	merger       *consensus.Merger
 
-<<<<<<< HEAD
 	eventMux       *event.TypeMux
 	txsCh          chan core.NewTxsEvent
 	txsSub         event.Subscription
@@ -174,11 +165,6 @@ type handler struct {
 	voteCh         chan core.NewVoteEvent
 	votesSub       event.Subscription
 	voteMonitorSub event.Subscription
-=======
-	eventMux *event.TypeMux
-	txsCh    chan core.NewTxsEvent
-	txsSub   event.Subscription
->>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 
 	requiredBlocks map[uint64]common.Hash
 
@@ -186,7 +172,8 @@ type handler struct {
 	quitSync chan struct{}
 	stopCh   chan struct{}
 
-	wg sync.WaitGroup
+	chainSync *chainSyncer
+	wg        sync.WaitGroup
 
 	handlerStartCh chan struct{}
 	handlerDoneCh  chan struct{}
@@ -202,7 +189,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		config.PeerSet = newPeerSet() // Nicety initialization for tests
 	}
 	h := &handler{
-<<<<<<< HEAD
 		nodeID:                 config.NodeID,
 		networkID:              config.Network,
 		forkFilter:             forkid.NewFilter(config.Chain),
@@ -221,20 +207,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		handlerDoneCh:          make(chan struct{}),
 		handlerStartCh:         make(chan struct{}),
 		stopCh:                 make(chan struct{}),
-=======
-		nodeID:         config.NodeID,
-		networkID:      config.Network,
-		forkFilter:     forkid.NewFilter(config.Chain),
-		eventMux:       config.EventMux,
-		database:       config.Database,
-		txpool:         config.TxPool,
-		chain:          config.Chain,
-		peers:          newPeerSet(),
-		requiredBlocks: config.RequiredBlocks,
-		quitSync:       make(chan struct{}),
-		handlerDoneCh:  make(chan struct{}),
-		handlerStartCh: make(chan struct{}),
->>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 	}
 	if config.Sync == downloader.FullSync {
 		// The database seems empty as the current block is the genesis. Yet the snap
@@ -273,7 +245,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	}
 	// Construct the downloader (long sync)
 	h.downloader = downloader.New(config.Database, h.eventMux, h.chain, nil, h.removePeer, h.enableSyncedFeatures)
-<<<<<<< HEAD
 
 	// Construct the fetcher (short sync)
 	validator := func(header *types.Header) error {
@@ -371,8 +342,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 
 	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.chain.GetBlockByHash, validator, broadcastBlockWithCheck,
 		heighter, finalizeHeighter, nil, inserter, h.removePeer)
-=======
->>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 
 	fetchTx := func(peer string, hashes []common.Hash) error {
 		p := h.peers.peer(peer)
@@ -398,6 +367,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return errors
 	}
 	h.txFetcher = fetcher.NewTxFetcher(h.txpool.Has, addTxs, fetchTx, h.removePeer)
+	h.chainSync = newChainSyncer(h)
 	return h, nil
 }
 
@@ -536,13 +506,9 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 			return err
 		}
 	}
-<<<<<<< HEAD
 	h.chainSync.handlePeerEvent()
 
 	// Propagate existing transactions and votes. new transactions and votes appearing
-=======
-	// Propagate existing transactions. new transactions appearing
->>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 	// after this will be sent via broadcasts.
 	h.syncTransactions(peer)
 	if h.votepool != nil && p.bscExt != nil {
@@ -741,7 +707,6 @@ func (h *handler) Start(maxPeers int, maxPeersPerIP int) {
 	h.txsSub = h.txpool.SubscribeTransactions(h.txsCh, false)
 	go h.txBroadcastLoop()
 
-<<<<<<< HEAD
 	// broadcast votes
 	if h.votepool != nil {
 		h.wg.Add(1)
@@ -766,10 +731,9 @@ func (h *handler) Start(maxPeers int, maxPeersPerIP int) {
 	h.minedBlockSub = h.eventMux.Subscribe(core.NewMinedBlockEvent{})
 	go h.minedBroadcastLoop()
 
-=======
->>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 	// start sync handlers
-	h.txFetcher.Start()
+	h.wg.Add(1)
+	go h.chainSync.loop()
 
 	// start peer handler tracker
 	h.wg.Add(1)
@@ -794,7 +758,6 @@ func (h *handler) startMaliciousVoteMonitor() {
 }
 
 func (h *handler) Stop() {
-<<<<<<< HEAD
 	h.txsSub.Unsubscribe()        // quits txBroadcastLoop
 	h.reannoTxsSub.Unsubscribe()  // quits txReannounceLoop
 	h.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
@@ -805,12 +768,6 @@ func (h *handler) Stop() {
 		}
 	}
 	close(h.stopCh)
-=======
-	h.txsSub.Unsubscribe() // quits txBroadcastLoop
-	h.txFetcher.Stop()
-	h.downloader.Terminate()
-
->>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 	// Quit chainSync and txsync64.
 	// After this is done, no new peers will be accepted.
 	close(h.quitSync)
@@ -825,7 +782,6 @@ func (h *handler) Stop() {
 	log.Info("Ethereum protocol stopped")
 }
 
-<<<<<<< HEAD
 // BroadcastBlock will either propagate a block to a subset of its peers, or
 // will only announce its availability (depending what's requested).
 func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
@@ -877,8 +833,6 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 	}
 }
 
-=======
->>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 // BroadcastTransactions will propagate a batch of transactions
 // - To a square root of all peers for non-blob transactions
 // - And, separately, as announcements to all peers which are not known to
@@ -961,7 +915,6 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		"bcastpeers", directPeers, "bcastcount", directCount, "annpeers", annPeers, "anncount", annCount)
 }
 
-<<<<<<< HEAD
 // ReannounceTransactions will announce a batch of local pending transactions
 // to a square root of all peers.
 func (h *handler) ReannounceTransactions(txs types.Transactions) {
@@ -1031,8 +984,6 @@ func (h *handler) minedBroadcastLoop() {
 	}
 }
 
-=======
->>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 // txBroadcastLoop announces new transactions to connected peers.
 func (h *handler) txBroadcastLoop() {
 	defer h.wg.Done()

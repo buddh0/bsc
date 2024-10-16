@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
@@ -126,11 +127,8 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 			Database:   dbNoFork,
 			Chain:      chainNoFork,
 			TxPool:     newTestTxPool(),
-<<<<<<< HEAD
 			VotePool:   newTestVotePool(),
 			Merger:     consensus.NewMerger(rawdb.NewMemoryDatabase()),
-=======
->>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 			Network:    1,
 			Sync:       downloader.FullSync,
 			BloomCache: 1,
@@ -139,11 +137,8 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 			Database:   dbProFork,
 			Chain:      chainProFork,
 			TxPool:     newTestTxPool(),
-<<<<<<< HEAD
 			VotePool:   newTestVotePool(),
 			Merger:     consensus.NewMerger(rawdb.NewMemoryDatabase()),
-=======
->>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 			Network:    1,
 			Sync:       downloader.FullSync,
 			BloomCache: 1,
@@ -540,7 +535,6 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 		}
 	}
 }
-<<<<<<< HEAD
 
 // Tests that local pending transactions get propagated to peers.
 func TestTransactionPendingReannounce(t *testing.T) {
@@ -859,5 +853,3 @@ func TestOptionMaxPeersPerIP(t *testing.T) {
 	}
 	close(doneCh5)
 }
-=======
->>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))

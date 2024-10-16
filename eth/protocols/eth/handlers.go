@@ -18,7 +18,6 @@ package eth
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -289,11 +288,20 @@ func ServiceGetReceiptsQuery(chain *core.BlockChain, query GetReceiptsRequest) [
 }
 
 func handleNewBlockhashes(backend Backend, msg Decoder, peer *Peer) error {
-	return errors.New("block announcements disallowed") // We dropped support for non-merge networks
+	// A batch of new block announcements just arrived
+	ann := new(NewBlockHashesPacket)
+	if err := msg.Decode(ann); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	// Mark the hashes as present at the remote node
+	for _, block := range *ann {
+		peer.markBlock(block.Hash)
+	}
+	// Deliver them all to the backend for queuing
+	return backend.Handle(peer, ann)
 }
 
 func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
-<<<<<<< HEAD
 	// Retrieve and decode the propagated block
 	ann := new(NewBlockPacket)
 	if err := msg.Decode(ann); err != nil {
@@ -320,9 +328,6 @@ func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
 	peer.markBlock(ann.Block.Hash())
 
 	return backend.Handle(peer, ann)
-=======
-	return errors.New("block broadcasts disallowed") // We dropped support for non-merge networks
->>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 }
 
 func handleBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {

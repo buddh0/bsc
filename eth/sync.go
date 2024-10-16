@@ -17,15 +17,20 @@
 package eth
 
 import (
-<<<<<<< HEAD
 	"math/big"
 	"time"
 
-=======
->>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
+	"github.com/ethereum/go-ethereum/log"
+)
+
+const (
+	forceSyncCycle      = 10 * time.Second // Time interval to force syncs, even if few peers are available
+	defaultMinSyncPeers = 5                // Amount of peers desired to start syncing
 )
 
 // syncTransactions starts sending all currently pending transactions to the given peer.
@@ -41,7 +46,6 @@ func (h *handler) syncTransactions(p *eth.Peer) {
 	}
 	p.AsyncSendPooledTransactionHashes(hashes)
 }
-<<<<<<< HEAD
 
 // syncVotes starts sending all currently pending votes to the given peer.
 func (h *handler) syncVotes(p *bscPeer) {
@@ -252,5 +256,3 @@ func (h *handler) doSync(op *chainSyncOp) error {
 	}
 	return nil
 }
-=======
->>>>>>> f4d53133f (consensus, cmd, core, eth: remove support for non-merge mode of operation (#29169))
