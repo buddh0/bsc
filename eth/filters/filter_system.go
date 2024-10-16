@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -61,7 +62,7 @@ type Backend interface {
 	GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
 	GetLogs(ctx context.Context, blockHash common.Hash, number uint64) ([][]*types.Log, error)
-	PendingBlockAndReceipts() (*types.Block, types.Receipts)
+	Pending() (*types.Block, types.Receipts, *state.StateDB)
 
 	CurrentHeader() *types.Header
 	ChainConfig() *params.ChainConfig
@@ -70,7 +71,6 @@ type Backend interface {
 	SubscribeFinalizedHeaderEvent(ch chan<- core.FinalizedHeaderEvent) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
-	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribeNewVoteEvent(chan<- core.NewVoteEvent) event.Subscription
 
 	BloomStatus() (uint64, uint64)
@@ -210,7 +210,6 @@ type EventSystem struct {
 	txsSub             event.Subscription // Subscription for new transaction event
 	logsSub            event.Subscription // Subscription for new log event
 	rmLogsSub          event.Subscription // Subscription for removed log event
-	pendingLogsSub     event.Subscription // Subscription for pending log event
 	chainSub           event.Subscription // Subscription for new chain event
 	finalizedHeaderSub event.Subscription // Subscription for new finalized header
 	voteSub            event.Subscription // Subscription for new vote event
@@ -220,7 +219,6 @@ type EventSystem struct {
 	uninstall         chan *subscription             // remove filter for event notification
 	txsCh             chan core.NewTxsEvent          // Channel to receive new transactions event
 	logsCh            chan []*types.Log              // Channel to receive new log event
-	pendingLogsCh     chan []*types.Log              // Channel to receive new log event
 	rmLogsCh          chan core.RemovedLogsEvent     // Channel to receive removed log event
 	chainCh           chan core.ChainEvent           // Channel to receive new chain event
 	finalizedHeaderCh chan core.FinalizedHeaderEvent // Channel to receive new finalized header event
@@ -242,7 +240,6 @@ func NewEventSystem(sys *FilterSystem) *EventSystem {
 		txsCh:             make(chan core.NewTxsEvent, txChanSize),
 		logsCh:            make(chan []*types.Log, logsChanSize),
 		rmLogsCh:          make(chan core.RemovedLogsEvent, rmLogsChanSize),
-		pendingLogsCh:     make(chan []*types.Log, logsChanSize),
 		chainCh:           make(chan core.ChainEvent, chainEvChanSize),
 		finalizedHeaderCh: make(chan core.FinalizedHeaderEvent, finalizedHeaderEvChanSize),
 		voteCh:            make(chan core.NewVoteEvent, voteChanSize),
@@ -253,12 +250,11 @@ func NewEventSystem(sys *FilterSystem) *EventSystem {
 	m.logsSub = m.backend.SubscribeLogsEvent(m.logsCh)
 	m.rmLogsSub = m.backend.SubscribeRemovedLogsEvent(m.rmLogsCh)
 	m.chainSub = m.backend.SubscribeChainEvent(m.chainCh)
-	m.pendingLogsSub = m.backend.SubscribePendingLogsEvent(m.pendingLogsCh)
 	m.finalizedHeaderSub = m.backend.SubscribeFinalizedHeaderEvent(m.finalizedHeaderCh)
 	m.voteSub = m.backend.SubscribeNewVoteEvent(m.voteCh)
 
 	// Make sure none of the subscriptions are empty
-	if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil {
+	if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil {
 		log.Crit("Subscribe for event system failed")
 	}
 	if m.voteSub == nil || m.finalizedHeaderSub == nil {
@@ -493,12 +489,12 @@ func (es *EventSystem) handleLogs(filters filterIndex, ev []*types.Log) {
 	}
 }
 
-func (es *EventSystem) handlePendingLogs(filters filterIndex, ev []*types.Log) {
-	if len(ev) == 0 {
+func (es *EventSystem) handlePendingLogs(filters filterIndex, logs []*types.Log) {
+	if len(logs) == 0 {
 		return
 	}
 	for _, f := range filters[PendingLogsSubscription] {
-		matchedLogs := filterLogs(ev, nil, f.logsCrit.ToBlock, f.logsCrit.Addresses, f.logsCrit.Topics)
+		matchedLogs := filterLogs(logs, nil, f.logsCrit.ToBlock, f.logsCrit.Addresses, f.logsCrit.Topics)
 		if len(matchedLogs) > 0 {
 			f.logs <- matchedLogs
 		}
@@ -536,7 +532,6 @@ func (es *EventSystem) eventLoop() {
 		es.txsSub.Unsubscribe()
 		es.logsSub.Unsubscribe()
 		es.rmLogsSub.Unsubscribe()
-		es.pendingLogsSub.Unsubscribe()
 		es.chainSub.Unsubscribe()
 		es.finalizedHeaderSub.Unsubscribe()
 		if es.voteSub != nil {
@@ -561,10 +556,29 @@ func (es *EventSystem) eventLoop() {
 			es.handleLogs(index, ev)
 		case ev := <-es.rmLogsCh:
 			es.handleLogs(index, ev.Logs)
-		case ev := <-es.pendingLogsCh:
-			es.handlePendingLogs(index, ev)
 		case ev := <-es.chainCh:
 			es.handleChainEvent(index, ev)
+			// If we have no pending log subscription,
+			// we don't need to collect any pending logs.
+			if len(index[PendingLogsSubscription]) == 0 {
+				continue
+			}
+
+			// Pull the pending logs if there is a new chain head.
+			pendingBlock, pendingReceipts, _ := es.backend.Pending()
+			if pendingBlock == nil || pendingReceipts == nil {
+				continue
+			}
+			if pendingBlock.ParentHash() != ev.Block.Hash() {
+				continue
+			}
+			var logs []*types.Log
+			for _, receipt := range pendingReceipts {
+				if len(receipt.Logs) > 0 {
+					logs = append(logs, receipt.Logs...)
+				}
+			}
+			es.handlePendingLogs(index, logs)
 		case ev := <-es.finalizedHeaderCh:
 			es.handleFinalizedHeaderEvent(index, ev)
 		case ev := <-es.voteCh:
