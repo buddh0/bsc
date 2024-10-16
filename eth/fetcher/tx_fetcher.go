@@ -108,6 +108,8 @@ var (
 	txFetcherFetchingHashes = metrics.NewRegisteredGauge("eth/fetcher/transaction/fetching/hashes", nil)
 )
 
+var errTerminated = errors.New("terminated")
+
 // txAnnounce is the notification of the availability of a batch
 // of new transactions in the network.
 type txAnnounce struct {
@@ -784,7 +786,7 @@ func (f *TxFetcher) loop() {
 // rescheduleWait iterates over all the transactions currently in the waitlist
 // and schedules the movement into the fetcher for the earliest.
 //
-// The method has a granularity of 'gatherSlack', since there's not much point in
+// The method has a granularity of 'txGatherSlack', since there's not much point in
 // spinning over all the transactions just to maybe find one that should trigger
 // a few ms earlier.
 func (f *TxFetcher) rescheduleWait(timer *mclock.Timer, trigger chan struct{}) {
@@ -797,7 +799,7 @@ func (f *TxFetcher) rescheduleWait(timer *mclock.Timer, trigger chan struct{}) {
 	for _, instance := range f.waittime {
 		if earliest > instance {
 			earliest = instance
-			if txArriveTimeout-time.Duration(now-earliest) < gatherSlack {
+			if txArriveTimeout-time.Duration(now-earliest) < txGatherSlack {
 				break
 			}
 		}
@@ -810,7 +812,7 @@ func (f *TxFetcher) rescheduleWait(timer *mclock.Timer, trigger chan struct{}) {
 // rescheduleTimeout iterates over all the transactions currently in flight and
 // schedules a cleanup run when the first would trigger.
 //
-// The method has a granularity of 'gatherSlack', since there's not much point in
+// The method has a granularity of 'txGatherSlack', since there's not much point in
 // spinning over all the transactions just to maybe find one that should trigger
 // a few ms earlier.
 //
@@ -835,7 +837,7 @@ func (f *TxFetcher) rescheduleTimeout(timer *mclock.Timer, trigger chan struct{}
 		}
 		if earliest > req.time {
 			earliest = req.time
-			if txFetchTimeout-time.Duration(now-earliest) < gatherSlack {
+			if txFetchTimeout-time.Duration(now-earliest) < txGatherSlack {
 				break
 			}
 		}

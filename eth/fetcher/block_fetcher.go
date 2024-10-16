@@ -18,7 +18,6 @@
 package fetcher
 
 import (
-	"errors"
 	"math/rand"
 	"time"
 
@@ -72,8 +71,6 @@ var (
 	blockInsertFailRecordslimit = 1000
 	blockInsertFailGauge        = metrics.NewRegisteredGauge("chain/insert/failed", nil)
 )
-
-var errTerminated = errors.New("terminated")
 
 // HeaderRetrievalFn is a callback type for retrieving a header from the local chain.
 type HeaderRetrievalFn func(common.Hash) *types.Header
