@@ -560,9 +560,7 @@ func TestLogFilter(t *testing.T) {
 	if nsend := backend.logsFeed.Send(allLogs); nsend == 0 {
 		t.Fatal("Logs event not delivered")
 	}
-	// if nsend := backend.pendingLogsFeed.Send(allLogs); nsend == 0 {
-	// 	t.Fatal("Pending logs event not delivered")
-	// }
+
 	// set pending logs
 	backend.notifyPending(allLogs)
 
