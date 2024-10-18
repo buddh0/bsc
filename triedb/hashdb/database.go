@@ -627,7 +627,6 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize, common.Stora
 func (db *Database) Close() error {
 	if db.cleans != nil {
 		db.cleans.Reset()
-		db.cleans = nil
 	}
 	return nil
 }

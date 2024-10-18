@@ -18,6 +18,7 @@
 package eth
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -50,6 +51,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/eth/protocols/trust"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -119,8 +121,8 @@ type Ethereum struct {
 	votePool *vote.VotePool
 }
 
-// New creates a new Ethereum object (including the
-// initialisation of the common Ethereum object)
+// New creates a new Ethereum object (including the initialisation of the common Ethereum object),
+// whose lifecycle will be managed by the provided node.
 func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// Ensure configuration values are compatible and sane
 	if config.SyncMode == downloader.LightSync {
@@ -132,7 +134,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if !config.TriesVerifyMode.IsValid() {
 		return nil, fmt.Errorf("invalid tries verify mode %d", config.TriesVerifyMode)
 	}
-	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(common.Big0) <= 0 {
+	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Sign() <= 0 {
 		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.Defaults.Miner.GasPrice)
 		config.Miner.GasPrice = new(big.Int).Set(ethconfig.Defaults.Miner.GasPrice)
 	}
@@ -182,32 +184,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Override the chain config with provided settings.
-	var overrides core.ChainOverrides
-	if config.OverridePassedForkTime != nil {
-		chainConfig.ShanghaiTime = config.OverridePassedForkTime
-		chainConfig.KeplerTime = config.OverridePassedForkTime
-		chainConfig.FeynmanTime = config.OverridePassedForkTime
-		chainConfig.FeynmanFixTime = config.OverridePassedForkTime
-		chainConfig.CancunTime = config.OverridePassedForkTime
-		chainConfig.HaberTime = config.OverridePassedForkTime
-		chainConfig.HaberFixTime = config.OverridePassedForkTime
-		chainConfig.BohrTime = config.OverridePassedForkTime
-		overrides.OverridePassedForkTime = config.OverridePassedForkTime
-	}
-	if config.OverridePascal != nil {
-		chainConfig.PascalTime = config.OverridePascal
-		overrides.OverridePascal = config.OverridePascal
-	}
-	if config.OverridePrague != nil {
-		chainConfig.PragueTime = config.OverridePrague
-		overrides.OverridePrague = config.OverridePrague
-	}
-	if config.OverrideVerkle != nil {
-		chainConfig.VerkleTime = config.OverrideVerkle
-		overrides.OverrideVerkle = config.OverrideVerkle
-	}
-
 	// startup ancient freeze
 	if err = chainDb.SetupFreezerEnv(&ethdb.FreezerEnv{
 		ChainCfg:         chainConfig,
@@ -293,6 +269,43 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			JournalFile:         config.JournalFileEnabled,
 		}
 	)
+	if config.VMTrace != "" {
+		var traceConfig json.RawMessage
+		if config.VMTraceJsonConfig != "" {
+			traceConfig = json.RawMessage(config.VMTraceJsonConfig)
+		}
+		t, err := tracers.LiveDirectory.New(config.VMTrace, traceConfig)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to create tracer %s: %v", config.VMTrace, err)
+		}
+		vmConfig.Tracer = t
+	}
+	// Override the chain config with provided settings.
+	var overrides core.ChainOverrides
+	if config.OverridePassedForkTime != nil {
+		chainConfig.ShanghaiTime = config.OverridePassedForkTime
+		chainConfig.KeplerTime = config.OverridePassedForkTime
+		chainConfig.FeynmanTime = config.OverridePassedForkTime
+		chainConfig.FeynmanFixTime = config.OverridePassedForkTime
+		chainConfig.CancunTime = config.OverridePassedForkTime
+		chainConfig.HaberTime = config.OverridePassedForkTime
+		chainConfig.HaberFixTime = config.OverridePassedForkTime
+		chainConfig.BohrTime = config.OverridePassedForkTime
+		overrides.OverridePassedForkTime = config.OverridePassedForkTime
+	}
+	if config.OverridePascal != nil {
+		chainConfig.PascalTime = config.OverridePascal
+		overrides.OverridePascal = config.OverridePascal
+	}
+	if config.OverridePrague != nil {
+		chainConfig.PragueTime = config.OverridePrague
+		overrides.OverridePrague = config.OverridePrague
+	}
+	if config.OverrideVerkle != nil {
+		chainConfig.VerkleTime = config.OverrideVerkle
+		overrides.OverrideVerkle = config.OverrideVerkle
+	}
+
 	bcOps := make([]core.BlockChainOption, 0)
 	if config.PipeCommit {
 		bcOps = append(bcOps, core.EnablePipelineCommit)

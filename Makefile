@@ -2,7 +2,7 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: geth android ios evm all test truffle-test clean
+.PHONY: geth all test truffle-test lint clean devtools help
 .PHONY: docker
 
 GOBIN = ./build/bin
@@ -69,4 +69,3 @@ docker:
 help: Makefile
 	@echo " Choose a command run in go-ethereum:"
 	@sed -n 's/^#?//p' $< | column -t -s ':' |  sort | sed -e 's/^/ /'
-.PHONY: help

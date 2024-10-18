@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/systemcontracts"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
@@ -225,7 +226,7 @@ func (eth *Ethereum) stateAtBlock(ctx context.Context, block *types.Block, reexe
 }
 
 // stateAtTransaction returns the execution environment of a certain transaction.
-func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*core.Message, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
+func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*types.Transaction, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
 	// Short circuit if it's genesis block.
 	if block.NumberU64() == 0 {
 		return nil, vm.BlockContext{}, nil, nil, errors.New("no transaction in genesis")
@@ -245,6 +246,12 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 	if !eth.blockchain.Config().IsFeynman(block.Number(), block.Time()) {
 		systemcontracts.UpgradeBuildInSystemContract(eth.blockchain.Config(), block.Number(), parent.Time(), block.Time(), statedb)
 	}
+	// Insert parent beacon block root in the state as per EIP-4788.
+	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
+		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
+		vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, eth.blockchain.Config(), vm.Config{})
+		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
+	}
 	if txIndex == 0 && len(block.Transactions()) == 0 {
 		return nil, vm.BlockContext{}, statedb, release, nil
 	}
@@ -260,8 +267,8 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 				if isSystem, _ := posa.IsSystemTransaction(tx, block.Header()); isSystem {
 					balance := statedb.GetBalance(consensus.SystemAddress)
 					if balance.Cmp(common.U2560) > 0 {
-						statedb.SetBalance(consensus.SystemAddress, uint256.NewInt(0))
-						statedb.AddBalance(block.Header().Coinbase, balance)
+						statedb.SetBalance(consensus.SystemAddress, uint256.NewInt(0), tracing.BalanceChangeUnspecified)
+						statedb.AddBalance(block.Header().Coinbase, balance, tracing.BalanceChangeUnspecified)
 					}
 
 					if eth.blockchain.Config().IsFeynman(block.Number(), block.Time()) {
@@ -277,7 +284,7 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 		txContext := core.NewEVMTxContext(msg)
 		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
 		if idx == txIndex {
-			return msg, context, statedb, release, nil
+			return tx, context, statedb, release, nil
 		}
 		// Not yet the searched for transaction, execute on top of the current state
 		vmenv := vm.NewEVM(context, txContext, statedb, eth.blockchain.Config(), vm.Config{})
