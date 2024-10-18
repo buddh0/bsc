@@ -157,42 +157,40 @@ func (p *triePrefetcher) mainLoop() {
 					<-child.term
 				}
 
-				if metrics.EnabledExpensive {
-					switch fetcher.root {
-					case p.root:
-						p.accountLoadMeter.Mark(int64(len(fetcher.seen)))
-						p.accountDupMeter.Mark(int64(fetcher.dups))
-						p.accountSkipMeter.Mark(int64(len(fetcher.tasks)))
-						fetcher.lock.Lock()
-						for _, key := range fetcher.used {
-							delete(fetcher.seen, string(key))
-						}
-						fetcher.lock.Unlock()
-						p.accountWasteMeter.Mark(int64(len(fetcher.seen)))
-
-					case p.rootParent:
-						p.accountStaleLoadMeter.Mark(int64(len(fetcher.seen)))
-						p.accountStaleDupMeter.Mark(int64(fetcher.dups))
-						p.accountStaleSkipMeter.Mark(int64(len(fetcher.tasks)))
-						fetcher.lock.Lock()
-						for _, key := range fetcher.used {
-							delete(fetcher.seen, string(key))
-						}
-						fetcher.lock.Unlock()
-						p.accountStaleWasteMeter.Mark(int64(len(fetcher.seen)))
-
-					default:
-						p.storageLoadMeter.Mark(int64(len(fetcher.seen)))
-						p.storageDupMeter.Mark(int64(fetcher.dups))
-						p.storageSkipMeter.Mark(int64(len(fetcher.tasks)))
-
-						fetcher.lock.Lock()
-						for _, key := range fetcher.used {
-							delete(fetcher.seen, string(key))
-						}
-						fetcher.lock.Unlock()
-						p.storageWasteMeter.Mark(int64(len(fetcher.seen)))
+				switch fetcher.root {
+				case p.root:
+					p.accountLoadMeter.Mark(int64(len(fetcher.seen)))
+					p.accountDupMeter.Mark(int64(fetcher.dups))
+					p.accountSkipMeter.Mark(int64(len(fetcher.tasks)))
+					fetcher.lock.Lock()
+					for _, key := range fetcher.used {
+						delete(fetcher.seen, string(key))
 					}
+					fetcher.lock.Unlock()
+					p.accountWasteMeter.Mark(int64(len(fetcher.seen)))
+
+				case p.rootParent:
+					p.accountStaleLoadMeter.Mark(int64(len(fetcher.seen)))
+					p.accountStaleDupMeter.Mark(int64(fetcher.dups))
+					p.accountStaleSkipMeter.Mark(int64(len(fetcher.tasks)))
+					fetcher.lock.Lock()
+					for _, key := range fetcher.used {
+						delete(fetcher.seen, string(key))
+					}
+					fetcher.lock.Unlock()
+					p.accountStaleWasteMeter.Mark(int64(len(fetcher.seen)))
+
+				default:
+					p.storageLoadMeter.Mark(int64(len(fetcher.seen)))
+					p.storageDupMeter.Mark(int64(fetcher.dups))
+					p.storageSkipMeter.Mark(int64(len(fetcher.tasks)))
+
+					fetcher.lock.Lock()
+					for _, key := range fetcher.used {
+						delete(fetcher.seen, string(key))
+					}
+					fetcher.lock.Unlock()
+					p.storageWasteMeter.Mark(int64(len(fetcher.seen)))
 				}
 			}
 			close(p.closeMainDoneChan)
@@ -316,9 +314,6 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 // used marks a batch of state items used to allow creating statistics as to
 // how useful or wasteful the prefetcher is.
 func (p *triePrefetcher) used(owner common.Hash, root common.Hash, used [][]byte) {
-	if !metrics.EnabledExpensive {
-		return
-	}
 	// If the prefetcher is an inactive one, bail out
 	if p.fetches != nil {
 		return

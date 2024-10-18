@@ -126,10 +126,3 @@ type ReadPacket struct {
 	Data []byte
 	Addr *net.UDPAddr
 }
-
-func min(x, y int) int {
-	if x > y {
-		return y
-	}
-	return x
-}

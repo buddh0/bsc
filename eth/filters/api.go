@@ -35,10 +35,11 @@ import (
 )
 
 var (
-	errInvalidTopic      = errors.New("invalid topic(s)")
-	errFilterNotFound    = errors.New("filter not found")
-	errInvalidBlockRange = errors.New("invalid block range params")
-	errExceedMaxTopics   = errors.New("exceed max topics")
+	errInvalidTopic           = errors.New("invalid topic(s)")
+	errFilterNotFound         = errors.New("filter not found")
+	errInvalidBlockRange      = errors.New("invalid block range params")
+	errPendingLogsUnsupported = errors.New("pending logs are not supported")
+	errExceedMaxTopics        = errors.New("exceed max topics")
 )
 
 // The maximum number of topic criteria allowed, vm.LOG4 - vm.LOG0
@@ -576,7 +577,7 @@ func (api *FilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 				f.txs = nil
 				return hashes, nil
 			}
-		case LogsSubscription, MinedAndPendingLogsSubscription:
+		case LogsSubscription:
 			logs := f.logs
 			f.logs = nil
 			return returnLogs(logs), nil

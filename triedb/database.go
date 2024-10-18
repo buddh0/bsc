@@ -142,17 +142,17 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 		if rawdb.ReadStateScheme(triediskdb) == rawdb.HashScheme {
 			log.Warn("Incompatible state scheme", "old", rawdb.HashScheme, "new", rawdb.PathScheme)
 		}
-		db.backend = pathdb.New(triediskdb, config.PathDB)
+		db.backend = pathdb.New(triediskdb, config.PathDB, config.IsVerkle)
 	} else if strings.Compare(dbScheme, rawdb.PathScheme) == 0 {
 		if config.PathDB == nil {
 			config.PathDB = pathdb.Defaults
 		}
-		db.backend = pathdb.New(triediskdb, config.PathDB)
+		db.backend = pathdb.New(triediskdb, config.PathDB, config.IsVerkle)
 	} else {
 		var resolver hashdb.ChildResolver
 		if config.IsVerkle {
 			// TODO define verkle resolver
-			log.Crit("Verkle node resolver is not defined")
+			log.Crit("verkle does not use a hash db")
 		} else {
 			resolver = trie.MerkleResolver{}
 		}

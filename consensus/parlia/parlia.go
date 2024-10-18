@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/systemcontracts"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -1810,8 +1811,8 @@ func (p *Parlia) distributeIncoming(val common.Address, state *state.StateDB, he
 	if balance.Cmp(common.U2560) <= 0 {
 		return nil
 	}
-	state.SetBalance(consensus.SystemAddress, common.U2560)
-	state.AddBalance(coinbase, balance)
+	state.SetBalance(consensus.SystemAddress, common.U2560, tracing.BalanceChangeUnspecified)
+	state.AddBalance(coinbase, balance, tracing.BalanceChangeUnspecified)
 
 	doDistributeSysReward := !p.chainConfig.IsKepler(header.Number, header.Time) &&
 		state.GetBalance(common.HexToAddress(systemcontracts.SystemRewardContract)).Cmp(maxSystemBalance) < 0

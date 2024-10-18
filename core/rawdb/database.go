@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -474,8 +473,8 @@ func resolveChainFreezerDir(ancient string) string {
 	// sub folder, if not then two possibilities:
 	// - chain freezer is not initialized
 	// - chain freezer exists in legacy location (root ancient folder)
-	chain := path.Join(ancient, ChainFreezerName)
-	state := path.Join(ancient, StateFreezerName)
+	chain := filepath.Join(ancient, ChainFreezerName)
+	state := filepath.Join(ancient, StateFreezerName)
 	if common.FileExist(chain) {
 		return chain
 	}
