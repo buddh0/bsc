@@ -2279,6 +2279,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			vmCfg := bc.vmConfig
 			vmCfg.Tracer = nil
 			go bc.prefetcher.Prefetch(block, throwaway, &vmCfg, interruptCh)
+
+			// 2.do trie prefetch for MPT trie node cache
+			// it is for the big state trie tree, prefetch based on transaction's From/To address.
+			// trie prefetcher is thread safe now, ok to prefetch in a separate routine
+			go throwaway.TriePrefetchInAdvance(block, signer)
 		}
 
 		// The traced section of block import.
