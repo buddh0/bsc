@@ -142,8 +142,7 @@ func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
 			statedb.SetState(addr, key, value)
 		}
 	}
-	statedb.IntermediateRoot(false)
-	root, _, err := statedb.Commit(0, nil)
+	root, _, err := statedb.Commit(0, false)
 	return root, err
 }
 
@@ -171,8 +170,7 @@ func flushAlloc(ga *types.GenesisAlloc, db ethdb.Database, triedb *triedb.Databa
 			statedb.SetState(addr, key, value)
 		}
 	}
-	statedb.IntermediateRoot(false)
-	root, _, err := statedb.Commit(0, nil)
+	root, _, err := statedb.Commit(0, false)
 	if err != nil {
 		return err
 	}
@@ -505,7 +503,7 @@ func (g *Genesis) ToBlock() *types.Block {
 			}
 		}
 	}
-	return types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil)).WithWithdrawals(withdrawals)
+	return types.NewBlock(head, &types.Body{Withdrawals: withdrawals}, nil, trie.NewStackTrie(nil))
 }
 
 // Commit writes the block and state of a genesis specification to the database.
@@ -617,6 +615,8 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
 			common.BytesToAddress([]byte{7}): {Balance: big.NewInt(1)}, // ECScalarMul
 			common.BytesToAddress([]byte{8}): {Balance: big.NewInt(1)}, // ECPairing
 			common.BytesToAddress([]byte{9}): {Balance: big.NewInt(1)}, // BLAKE2b
+			// Pre-deploy EIP-4788 system contract
+			params.BeaconRootsAddress: {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
 		},
 	}
 	if faucet != nil {

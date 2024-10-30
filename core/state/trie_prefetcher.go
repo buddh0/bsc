@@ -56,6 +56,8 @@ type triePrefetcher struct {
 	fetches    map[string]Trie        // Partially or fully fetched tries. Only populated for inactive copies
 	fetchers   map[string]*subfetcher // Subfetchers for each trie
 
+	noreads bool // Whether to ignore state-read-only prefetch requests
+
 	abortChan         chan *subfetcher // to abort a single subfetcher and its children
 	closed            int32
 	closeMainChan     chan struct{} // it is to inform the mainLoop
@@ -80,7 +82,7 @@ type triePrefetcher struct {
 }
 
 // newTriePrefetcher
-func newTriePrefetcher(db Database, root, rootParent common.Hash, namespace string) *triePrefetcher {
+func newTriePrefetcher(db Database, root, rootParent common.Hash, namespace string, noreads bool) *triePrefetcher {
 	prefix := triePrefetchMetricsPrefix + namespace
 	p := &triePrefetcher{
 		db:         db,
@@ -88,6 +90,8 @@ func newTriePrefetcher(db Database, root, rootParent common.Hash, namespace stri
 		rootParent: rootParent,
 		fetchers:   make(map[string]*subfetcher), // Active prefetchers use the fetchers map
 		abortChan:  make(chan *subfetcher, abortChanSize),
+
+		noreads: noreads,
 
 		closeMainChan:     make(chan struct{}),
 		closeMainDoneChan: make(chan struct{}),
@@ -263,15 +267,23 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 }
 
 // prefetch schedules a batch of trie items to prefetch.
-func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr common.Address, keys [][]byte) {
+func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr common.Address, keys [][]byte, read bool) error {
+	// If the state item is only being read, but reads are disabled, return
+	if read && p.noreads {
+		return nil
+	}
+
 	// If the prefetcher is an inactive one, bail out
 	if p.fetches != nil {
-		return
+		return nil
 	}
+
 	select {
 	case <-p.closeMainChan: // skip closed trie prefetcher
+		// TODO: ignore whether it's terminated?
 	case p.prefetchChan <- &prefetchMsg{owner, root, addr, keys}:
 	}
+	return nil
 }
 
 // trie returns the trie matching the root hash, or nil if the prefetcher doesn't

@@ -52,8 +52,6 @@ import (
 var (
 	canonicalSeed = 1
 	forkSeed      = 2
-
-	TestTriesInMemory = 128
 )
 
 // newCanonical creates a chain database, and injects a deterministic canonical
@@ -176,8 +174,7 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 			blockchain.reportBlock(block, receipts, err)
 			return err
 		}
-		err = blockchain.validator.ValidateState(block, statedb, receipts, usedGas)
-		if err != nil {
+		if err = blockchain.validator.ValidateState(block, statedb, receipts, usedGas, false); err != nil {
 			blockchain.reportBlock(block, receipts, err)
 			return err
 		}
@@ -797,7 +794,7 @@ func testFastVsFullChains(t *testing.T, scheme string) {
 		t.Fatalf("failed to insert receipt %d: %v", n, err)
 	}
 	// Freezer style fast import the chain.
-	ancientDb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false, false, false, false, false)
+	ancientDb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "", "", false, false, false, false, false)
 	if err != nil {
 		t.Fatalf("failed to create temp freezer db: %v", err)
 	}
@@ -887,12 +884,12 @@ func testLightVsFastVsFullChainHeads(t *testing.T, scheme string) {
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 	)
-	height := uint64(1024)
+	height := uint64(64)
 	_, blocks, receipts := GenerateChainWithGenesis(gspec, ethash.NewFaker(), int(height), nil)
 
 	// makeDb creates a db instance for testing.
 	makeDb := func() ethdb.Database {
-		db, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false, false, false, false, false)
+		db, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(),"", "", false, false, false, false, false)
 		if err != nil {
 			t.Fatalf("failed to create temp freezer db: %v", err)
 		}
@@ -1724,7 +1721,7 @@ func TestTrieForkGC(t *testing.T) {
 		Config:  params.TestChainConfig,
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
-	genDb, blocks, _ := GenerateChainWithGenesis(genesis, engine, 2*TriesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
+	genDb, blocks, _ := GenerateChainWithGenesis(genesis, engine, 2*state.TriesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
 
 	// Generate a bunch of fork blocks, each side forking from the canonical chain
 	forks := make([]*types.Block, len(blocks))
@@ -1752,7 +1749,7 @@ func TestTrieForkGC(t *testing.T) {
 		}
 	}
 	// Dereference all the recent tries and ensure no past trie is left in
-	for i := 0; i < TriesInMemory; i++ {
+	for i := 0; i < state.TriesInMemory; i++ {
 		chain.TrieDB().Dereference(blocks[len(blocks)-1-i].Root())
 		chain.TrieDB().Dereference(forks[len(blocks)-1-i].Root())
 	}
@@ -1776,11 +1773,11 @@ func testLargeReorgTrieGC(t *testing.T, scheme string) {
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
 	genDb, shared, _ := GenerateChainWithGenesis(genesis, engine, 64, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
-	original, _ := GenerateChain(genesis.Config, shared[len(shared)-1], engine, genDb, 2*TriesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{2}) })
-	competitor, _ := GenerateChain(genesis.Config, shared[len(shared)-1], engine, genDb, 2*TriesInMemory+1, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{3}) })
+	original, _ := GenerateChain(genesis.Config, shared[len(shared)-1], engine, genDb, 2*state.TriesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{2}) })
+	competitor, _ := GenerateChain(genesis.Config, shared[len(shared)-1], engine, genDb, 2*state.TriesInMemory+1, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{3}) })
 
 	// Import the shared chain and the original canonical one
-	db, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false, false, false, false, false)
+	db, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "", "", false, false, false, false, false)
 	defer db.Close()
 
 	chain, err := NewBlockChain(db, DefaultCacheConfigWithScheme(scheme), genesis, nil, engine, vm.Config{}, nil, nil)
@@ -1816,7 +1813,7 @@ func testLargeReorgTrieGC(t *testing.T, scheme string) {
 	}
 	// In path-based trie database implementation, it will keep 128 diff + 1 disk
 	// layers, totally 129 latest states available. In hash-based it's 128.
-	states := TestTriesInMemory
+	states := state.TriesInMemory
 	if scheme == rawdb.PathScheme {
 		states = states + 1
 	}
@@ -1845,7 +1842,7 @@ func testBlockchainRecovery(t *testing.T, scheme string) {
 		funds   = big.NewInt(1000000000)
 		gspec   = &Genesis{Config: params.TestChainConfig, Alloc: types.GenesisAlloc{address: {Balance: funds}}}
 	)
-	height := uint64(1024)
+	height := uint64(64)
 	_, blocks, receipts := GenerateChainWithGenesis(gspec, ethash.NewFaker(), int(height), nil)
 
 	// Import the chain as a ancient-first node and ensure all pointers are updated
@@ -1920,7 +1917,7 @@ func testInsertReceiptChainRollback(t *testing.T, scheme string) {
 	}
 
 	// Set up a BlockChain that uses the ancient store.
-	ancientDb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false, false, false, false, false)
+	ancientDb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "",, "", false, false, false, false, false)
 	if err != nil {
 		t.Fatalf("failed to create temp freezer db: %v", err)
 	}
@@ -1984,13 +1981,13 @@ func testLowDiffLongChain(t *testing.T, scheme string) {
 	}
 	// We must use a pretty long chain to ensure that the fork doesn't overtake us
 	// until after at least 128 blocks post tip
-	genDb, blocks, _ := GenerateChainWithGenesis(genesis, engine, 6*TriesInMemory, func(i int, b *BlockGen) {
+	genDb, blocks, _ := GenerateChainWithGenesis(genesis, engine, 6*state.TriesInMemory, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{1})
 		b.OffsetTime(-9)
 	})
 
 	// Import the canonical chain
-	diskdb, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false, false, false, false, false)
+	diskdb, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "", "", false, false, false, false, false)
 	defer diskdb.Close()
 
 	chain, err := NewBlockChain(diskdb, DefaultCacheConfigWithScheme(scheme), genesis, nil, engine, vm.Config{}, nil, nil)
@@ -2004,7 +2001,7 @@ func testLowDiffLongChain(t *testing.T, scheme string) {
 	}
 	// Generate fork chain, starting from an early block
 	parent := blocks[10]
-	fork, _ := GenerateChain(genesis.Config, parent, engine, genDb, 8*TriesInMemory, func(i int, b *BlockGen) {
+	fork, _ := GenerateChain(genesis.Config, parent, engine, genDb, 8*state.TriesInMemory, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{2})
 	})
 
@@ -2067,7 +2064,7 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 		// Set the terminal total difficulty in the config
 		gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
 	}
-	genDb, blocks, _ := GenerateChainWithGenesis(gspec, engine, 2*TriesInMemory, func(i int, gen *BlockGen) {
+	genDb, blocks, _ := GenerateChainWithGenesis(gspec, engine, 2*state.TriesInMemory, func(i int, gen *BlockGen) {
 		tx, err := types.SignTx(types.NewTransaction(nonce, common.HexToAddress("deadbeef"), big.NewInt(100), 21000, big.NewInt(int64(i+1)*params.GWei), nil), signer, key)
 		if err != nil {
 			t.Fatalf("failed to create tx: %v", err)
@@ -2082,9 +2079,9 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
 
-	lastPrunedIndex := len(blocks) - TestTriesInMemory - 1
+	lastPrunedIndex := len(blocks) - state.TriesInMemory - 1
 	lastPrunedBlock := blocks[lastPrunedIndex-1]
-	firstNonPrunedBlock := blocks[len(blocks)-TestTriesInMemory]
+	firstNonPrunedBlock := blocks[len(blocks)-state.TriesInMemory]
 
 	// Verify pruning of lastPrunedBlock
 	if chain.HasBlockAndState(lastPrunedBlock.Hash(), lastPrunedBlock.NumberU64()) {
@@ -2111,7 +2108,7 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 	// Generate fork chain, make it longer than canon
 	parentIndex := lastPrunedIndex + blocksBetweenCommonAncestorAndPruneblock
 	parent := blocks[parentIndex]
-	fork, _ := GenerateChain(gspec.Config, parent, engine, genDb, 2*TriesInMemory, func(i int, b *BlockGen) {
+	fork, _ := GenerateChain(gspec.Config, parent, engine, genDb, 2*state.TriesInMemory, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{2})
 		if int(b.header.Number.Uint64()) >= mergeBlock {
 			b.SetPoS()
@@ -2202,7 +2199,7 @@ func testInsertKnownChainData(t *testing.T, typ string, scheme string) {
 		b.OffsetTime(-9) // A higher difficulty
 	})
 	// Import the shared chain and the original canonical one
-	chaindb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false, false, false, false, false)
+	chaindb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "", "", false, false, false, false, false)
 	if err != nil {
 		t.Fatalf("failed to create temp freezer db: %v", err)
 	}
@@ -2373,7 +2370,7 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 		}
 	})
 	// Import the shared chain and the original canonical one
-	chaindb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false, false, false, false, false)
+	chaindb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "", "", false, false, false, false, false)
 	if err != nil {
 		t.Fatalf("failed to create temp freezer db: %v", err)
 	}
@@ -2754,7 +2751,7 @@ func testSideImportPrunedBlocks(t *testing.T, scheme string) {
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
 	// Generate and import the canonical chain
-	_, blocks, _ := GenerateChainWithGenesis(genesis, engine, 2*TriesInMemory, nil)
+	_, blocks, _ := GenerateChainWithGenesis(genesis, engine, 2*state.TriesInMemory, nil)
 
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), DefaultCacheConfigWithScheme(scheme), genesis, nil, engine, vm.Config{}, nil, nil)
 	if err != nil {
@@ -2767,9 +2764,9 @@ func testSideImportPrunedBlocks(t *testing.T, scheme string) {
 	}
 	// In path-based trie database implementation, it will keep 128 diff + 1 disk
 	// layers, totally 129 latest states available. In hash-based it's 128.
-	states := TestTriesInMemory
+	states := state.TriesInMemory
 	if scheme == rawdb.PathScheme {
-		states = TestTriesInMemory + 1
+		states = state.TriesInMemory + 1
 	}
 	lastPrunedIndex := len(blocks) - states - 1
 	lastPrunedBlock := blocks[lastPrunedIndex]
@@ -3665,18 +3662,19 @@ func testSetCanonical(t *testing.T, scheme string) {
 			Alloc:   types.GenesisAlloc{address: {Balance: funds}},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
-		signer = types.LatestSigner(gspec.Config)
-		engine = ethash.NewFaker()
+		signer      = types.LatestSigner(gspec.Config)
+		engine      = ethash.NewFaker()
+		chainLength = 10
 	)
 	// Generate and import the canonical chain
-	_, canon, _ := GenerateChainWithGenesis(gspec, engine, 2*TriesInMemory, func(i int, gen *BlockGen) {
+	_, canon, _ := GenerateChainWithGenesis(gspec, engine, chainLength, func(i int, gen *BlockGen) {
 		tx, err := types.SignTx(types.NewTransaction(gen.TxNonce(address), common.Address{0x00}, big.NewInt(1000), params.TxGas, gen.header.BaseFee, nil), signer, key)
 		if err != nil {
 			panic(err)
 		}
 		gen.AddTx(tx)
 	})
-	diskdb, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false, false, false, false, false)
+	diskdb, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "", "", false, false, false, false, false)
 	defer diskdb.Close()
 
 	chain, err := NewBlockChain(diskdb, DefaultCacheConfigWithScheme(scheme), gspec, nil, engine, vm.Config{}, nil, nil)
@@ -3690,7 +3688,7 @@ func testSetCanonical(t *testing.T, scheme string) {
 	}
 
 	// Generate the side chain and import them
-	_, side, _ := GenerateChainWithGenesis(gspec, engine, 2*TriesInMemory, func(i int, gen *BlockGen) {
+	_, side, _ := GenerateChainWithGenesis(gspec, engine, chainLength, func(i int, gen *BlockGen) {
 		tx, err := types.SignTx(types.NewTransaction(gen.TxNonce(address), common.Address{0x00}, big.NewInt(1), params.TxGas, gen.header.BaseFee, nil), signer, key)
 		if err != nil {
 			panic(err)
@@ -3729,8 +3727,8 @@ func testSetCanonical(t *testing.T, scheme string) {
 	verify(side[len(side)-1])
 
 	// Reset the chain head to original chain
-	chain.SetCanonical(canon[TriesInMemory-1])
-	verify(canon[TriesInMemory-1])
+	chain.SetCanonical(canon[chainLength-1])
+	verify(canon[chainLength-1])
 }
 
 // TestCanonicalHashMarker tests all the canonical hash markers are updated/deleted

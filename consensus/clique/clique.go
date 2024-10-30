@@ -604,8 +604,8 @@ func (c *Clique) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *
 	// Assign the final state root to header.
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
-	// Assemble and return the final block for sealing
-	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil)), receipts, nil
+	// Assemble and return the final block for sealing.
+	return types.NewBlock(header, &types.Body{Transactions: txs, Uncles: uncles}, receipts, trie.NewStackTrie(nil)), receipts, nil
 }
 
 // Authorize injects a private key into the consensus engine to mint new blocks

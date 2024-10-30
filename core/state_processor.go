@@ -38,16 +38,14 @@ import (
 // StateProcessor implements Processor.
 type StateProcessor struct {
 	config *params.ChainConfig // Chain configuration options
-	bc     *BlockChain         // Canonical block chain
-	engine consensus.Engine    // Consensus engine used for block rewards
+	chain  *HeaderChain        // Canonical header chain
 }
 
 // NewStateProcessor initialises a new StateProcessor.
-func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consensus.Engine) *StateProcessor {
+func NewStateProcessor(config *params.ChainConfig, chain *HeaderChain) *StateProcessor {
 	return &StateProcessor{
 		config: config,
-		bc:     bc,
-		engine: engine,
+		chain:  chain,
 	}
 }
 
@@ -74,26 +72,27 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		misc.ApplyDAOHardFork(statedb)
 	}
 
-	lastBlock := p.bc.GetBlockByHash(block.ParentHash())
+	lastBlock := p.chain.GetHeaderByHash(block.ParentHash())
 	if lastBlock == nil {
 		return statedb, nil, nil, 0, errors.New("could not get parent block")
 	}
 	if !p.config.IsFeynman(block.Number(), block.Time()) {
 		// Handle upgrade build-in system contract code
-		systemcontracts.UpgradeBuildInSystemContract(p.config, blockNumber, lastBlock.Time(), block.Time(), statedb)
+		systemcontracts.UpgradeBuildInSystemContract(p.config, blockNumber, lastBlock.Time, block.Time(), statedb)
 	}
 
 	var (
-		context = NewEVMBlockContext(header, p.bc, nil)
-		vmenv   = vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
+		context vm.BlockContext
 		signer  = types.MakeSigner(p.config, header.Number, header.Time)
 		txNum   = len(block.Transactions())
 	)
+	context = NewEVMBlockContext(header, p.chain, nil)
+	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
 	}
 	// Iterate over and process the individual transactions
-	posa, isPoSA := p.engine.(consensus.PoSA)
+	posa, isPoSA := p.chain.engine.(consensus.PoSA)
 	commonTxs := make([]*types.Transaction, 0, txNum)
 
 	// initialise bloom processors
@@ -144,7 +143,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	err := p.engine.Finalize(p.bc, header, statedb, &commonTxs, block.Uncles(), withdrawals, &receipts, &systemTxs, usedGas)
+	err := p.chain.engine.Finalize(p.chain, header, statedb, &commonTxs, block.Uncles(), withdrawals, &receipts, &systemTxs, usedGas)
 	if err != nil {
 		return statedb, receipts, allLogs, *usedGas, err
 	}
@@ -247,6 +246,12 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *stat
 		if chainConfig := vmenv.ChainConfig(); chainConfig != nil && chainConfig.Parlia != nil {
 			return
 		}
+	}
+	if vmenv.Config.Tracer != nil && vmenv.Config.Tracer.OnSystemCallStart != nil {
+		vmenv.Config.Tracer.OnSystemCallStart()
+	}
+	if vmenv.Config.Tracer != nil && vmenv.Config.Tracer.OnSystemCallEnd != nil {
+		defer vmenv.Config.Tracer.OnSystemCallEnd()
 	}
 
 	// If EIP-4788 is enabled, we need to invoke the beaconroot storage contract with

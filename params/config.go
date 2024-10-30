@@ -564,7 +564,7 @@ type ChainConfig struct {
 type EthashConfig struct{}
 
 // String implements the stringer interface, returning the consensus engine details.
-func (c *EthashConfig) String() string {
+func (c EthashConfig) String() string {
 	return "ethash"
 }
 
@@ -575,8 +575,8 @@ type CliqueConfig struct {
 }
 
 // String implements the stringer interface, returning the consensus engine details.
-func (c *CliqueConfig) String() string {
-	return "clique"
+func (c CliqueConfig) String() string {
+	return fmt.Sprintf("clique(period: %d, epoch: %d)", c.Period, c.Epoch)
 }
 
 // ParliaConfig is the consensus engine configs for proof-of-staked-authority based sealing.
@@ -963,7 +963,7 @@ func (c *ChainConfig) IsOnFeynmanFix(currentBlockNumber *big.Int, lastBlockTime 
 	return !c.IsFeynmanFix(lastBlockNumber, lastBlockTime) && c.IsFeynmanFix(currentBlockNumber, currentBlockTime)
 }
 
-// IsCancun returns whether num is either equal to the Cancun fork time or greater.
+// IsCancun returns whether time is either equal to the Cancun fork time or greater.
 func (c *ChainConfig) IsCancun(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.CancunTime, time)
 }
@@ -1015,14 +1015,19 @@ func (c *ChainConfig) IsOnPascal(currentBlockNumber *big.Int, lastBlockTime uint
 	return !c.IsPascal(lastBlockNumber, lastBlockTime) && c.IsPascal(currentBlockNumber, currentBlockTime)
 }
 
-// IsPrague returns whether num is either equal to the Prague fork time or greater.
+// IsPrague returns whether time is either equal to the Prague fork time or greater.
 func (c *ChainConfig) IsPrague(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.PragueTime, time)
 }
 
-// IsVerkle returns whether num is either equal to the Verkle fork time or greater.
+// IsVerkle returns whether time is either equal to the Verkle fork time or greater.
 func (c *ChainConfig) IsVerkle(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.VerkleTime, time)
+}
+
+// IsEIP4762 returns whether eip 4762 has been activated at given block.
+func (c *ChainConfig) IsEIP4762(num *big.Int, time uint64) bool {
+	return c.IsVerkle(num, time)
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
@@ -1397,9 +1402,11 @@ func (err *ConfigCompatError) Error() string {
 		return fmt.Sprintf("mismatching %s in database (have block %d, want block %d, rewindto block %d)", err.What, err.StoredBlock, err.NewBlock, err.RewindToBlock)
 	}
 
-	if err.StoredTime == nil {
+	if err.StoredTime == nil && err.NewTime == nil {
+		return ""
+	} else if err.StoredTime == nil && err.NewTime != nil {
 		return fmt.Sprintf("mismatching %s in database (have timestamp nil, want timestamp %d, rewindto timestamp %d)", err.What, *err.NewTime, err.RewindToTime)
-	} else if err.NewTime == nil {
+	} else if err.StoredTime != nil && err.NewTime == nil {
 		return fmt.Sprintf("mismatching %s in database (have timestamp %d, want timestamp nil, rewindto timestamp %d)", err.What, *err.StoredTime, err.RewindToTime)
 	}
 	return fmt.Sprintf("mismatching %s in database (have timestamp %d, want timestamp %d, rewindto timestamp %d)", err.What, *err.StoredTime, *err.NewTime, err.RewindToTime)
@@ -1413,6 +1420,7 @@ func (err *ConfigCompatError) Error() string {
 type Rules struct {
 	ChainID                                                 *big.Int
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
+	IsEIP2929, IsEIP4762                                    bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
 	IsMerge                                                 bool
@@ -1435,6 +1443,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 	}
 	// disallow setting Merge out of order
 	isMerge = isMerge && c.IsLondon(num)
+	isVerkle := isMerge && c.IsVerkle(num, timestamp)
 	return Rules{
 		ChainID:          new(big.Int).Set(chainID),
 		IsHomestead:      c.IsHomestead(num),
@@ -1446,6 +1455,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsPetersburg:     c.IsPetersburg(num),
 		IsIstanbul:       c.IsIstanbul(num),
 		IsBerlin:         c.IsBerlin(num),
+		IsEIP2929:        c.IsBerlin(num) && !isVerkle,
 		IsLondon:         c.IsLondon(num),
 		IsMerge:          isMerge,
 		IsNano:           c.IsNano(num),
@@ -1464,5 +1474,6 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsPascal:         c.IsPascal(num, timestamp),
 		IsPrague:         c.IsPrague(num, timestamp),
 		IsVerkle:         c.IsVerkle(num, timestamp),
+		IsEIP4762:        isVerkle,
 	}
 }

@@ -93,7 +93,7 @@ func inspectFreezers(db ethdb.Database) ([]freezerInfo, error) {
 			infos = append(infos, info)
 
 		case StateFreezerName:
-			if ReadStateScheme(db) != PathScheme || db.StateStore() != nil {
+			if db.StateStore() != nil {
 				continue
 			}
 			datadir, err := db.AncientDatadir()
@@ -114,11 +114,11 @@ func inspectFreezers(db ethdb.Database) ([]freezerInfo, error) {
 
 			f, err := NewStateFreezer(datadir, true, 0)
 			if err != nil {
-				return nil, err
+				continue // might be possible the state freezer is not existent
 			}
 			defer f.Close()
 
-			info, err := inspect(StateFreezerName, stateFreezerNoSnappy, f)
+			info, err := inspect(freezer, stateFreezerNoSnappy, f)
 			if err != nil {
 				return nil, err
 			}

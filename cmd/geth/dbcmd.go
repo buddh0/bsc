@@ -328,11 +328,17 @@ func removeDB(ctx *cli.Context) error {
 		ancientDir = config.Node.ResolvePath(ancientDir)
 	}
 	// Delete state data
-	statePaths := []string{rootDir, filepath.Join(ancientDir, rawdb.StateFreezerName)}
+	statePaths := []string{
+		rootDir,
+		filepath.Join(ancientDir, rawdb.StateFreezerName),
+	}
 	confirmAndRemoveDB(statePaths, "state data", ctx, removeStateDataFlag.Name)
 
 	// Delete ancient chain
-	chainPaths := []string{filepath.Join(ancientDir, rawdb.ChainFreezerName)}
+	chainPaths := []string{filepath.Join(
+		ancientDir,
+		rawdb.ChainFreezerName,
+	)}
 	confirmAndRemoveDB(chainPaths, "ancient chain", ctx, removeChainDataFlag.Name)
 	return nil
 }
@@ -597,17 +603,13 @@ func checkStateContent(ctx *cli.Context) error {
 	return nil
 }
 
-func showLeveldbStats(db ethdb.KeyValueStater) {
-	if stats, err := db.Stat("leveldb.stats"); err != nil {
+func showDBStats(db ethdb.KeyValueStater) {
+	stats, err := db.Stat()
+	if err != nil {
 		log.Warn("Failed to read database stats", "error", err)
-	} else {
-		fmt.Println(stats)
+		return
 	}
-	if ioStats, err := db.Stat("leveldb.iostats"); err != nil {
-		log.Warn("Failed to read database iostats", "error", err)
-	} else {
-		fmt.Println(ioStats)
-	}
+	fmt.Println(stats)
 }
 
 func dbStats(ctx *cli.Context) error {
@@ -617,12 +619,12 @@ func dbStats(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true, false)
 	defer db.Close()
 
-	showLeveldbStats(db)
+	showDBStats(db)
 	if stack.CheckIfMultiDataBase() {
 		fmt.Println("show stats of state store")
-		showLeveldbStats(db.StateStore())
+		showDBStats(db.StateStore())
 		fmt.Println("show stats of block store")
-		showLeveldbStats(db.BlockStore())
+		showDBStats(db.BlockStore())
 	}
 
 	return nil
@@ -636,13 +638,12 @@ func dbCompact(ctx *cli.Context) error {
 	defer db.Close()
 
 	log.Info("Stats before compaction")
-	showLeveldbStats(db)
-
+	showDBStats(db)
 	if stack.CheckIfMultiDataBase() {
 		fmt.Println("show stats of state store")
-		showLeveldbStats(db.StateStore())
+		showDBStats(db.StateStore())
 		fmt.Println("show stats of block store")
-		showLeveldbStats(db.BlockStore())
+		showDBStats(db.BlockStore())
 	}
 
 	log.Info("Triggering compaction")
@@ -663,12 +664,12 @@ func dbCompact(ctx *cli.Context) error {
 	}
 
 	log.Info("Stats after compaction")
-	showLeveldbStats(db)
+	showDBStats(db)
 	if stack.CheckIfMultiDataBase() {
 		fmt.Println("show stats of state store after compaction")
-		showLeveldbStats(db.StateStore())
+		showDBStats(db.StateStore())
 		fmt.Println("show stats of block store after compaction")
-		showLeveldbStats(db.BlockStore())
+		showDBStats(db.BlockStore())
 	}
 	return nil
 }
@@ -742,7 +743,7 @@ func dbTrieGet(ctx *cli.Context) error {
 				log.Info("Could not decode the value", "error", err)
 				return err
 			}
-			nodeVal, hash := rawdb.ReadAccountTrieNode(db, pathKey)
+			nodeVal, hash := rawdb.ReadAccountTrieNodeAndHash(db, pathKey)
 			log.Info("TrieGet result ", "PathKey", common.Bytes2Hex(pathKey), "Hash: ", hash, "node: ", trie.NodeString(hash.Bytes(), nodeVal))
 		} else if ctx.NArg() == 2 {
 			owner, err = hexutil.Decode(ctx.Args().Get(0))
@@ -756,7 +757,7 @@ func dbTrieGet(ctx *cli.Context) error {
 				return err
 			}
 
-			nodeVal, hash := rawdb.ReadStorageTrieNode(db, common.BytesToHash(owner), pathKey)
+			nodeVal, hash := rawdb.ReadStorageTrieNodeAndHash(db, common.BytesToHash(owner), pathKey)
 			log.Info("TrieGet result ", "PathKey: ", common.Bytes2Hex(pathKey), "Owner: ", common.BytesToHash(owner), "Hash: ", hash, "node: ", trie.NodeString(hash.Bytes(), nodeVal))
 		}
 	} else if scheme == rawdb.HashScheme {

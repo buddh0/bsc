@@ -238,9 +238,6 @@ type worker struct {
 	// payload in proof-of-stake stage.
 	recommit time.Duration
 
-	// External functions
-	isLocalBlock func(header *types.Header) bool // Function used to determine whether the specified block is mined by local miner.
-
 	// Test hooks
 	newTaskHook       func(*task)                        // Method to call upon receiving a new sealing task.
 	skipSealHook      func(*task) bool                   // Method to decide whether skipping the sealing.
@@ -252,7 +249,7 @@ type worker struct {
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, init bool) *worker {
 	recentMinedBlocks, _ := lru.New(recentMinedCacheLimit)
 	worker := &worker{
-		prefetcher:         core.NewStatePrefetcher(chainConfig, eth.BlockChain(), engine),
+		prefetcher:         core.NewStatePrefetcher(chainConfig, eth.BlockChain().HeadChain()),
 		config:             config,
 		chainConfig:        chainConfig,
 		engine:             engine,
@@ -668,7 +665,7 @@ func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase co
 		return nil, err
 	}
 	if prevEnv == nil {
-		state.StartPrefetcher("miner")
+		state.StartPrefetcher("miner", nil)
 	} else {
 		state.TransferPrefetcher(prevEnv.state)
 	}
@@ -692,8 +689,7 @@ func (w *worker) updateSnapshot(env *environment) {
 
 	w.snapshotBlock = types.NewBlock(
 		env.header,
-		env.txs,
-		nil,
+		&types.Body{Transactions: env.txs},
 		env.receipts,
 		trie.NewStackTrie(nil),
 	)

@@ -52,9 +52,6 @@ var HashDefaults = &Config{
 // backend defines the methods needed to access/update trie nodes in different
 // state scheme.
 type backend interface {
-	// Scheme returns the identifier of used storage scheme.
-	Scheme() string
-
 	// Initialized returns an indicator if the state data is already initialized
 	// according to the state scheme.
 	Initialized(genesisRoot common.Hash) bool
@@ -77,6 +74,10 @@ type backend interface {
 
 	// Close closes the trie database backend and releases all held resources.
 	Close() error
+
+	// Reader returns a reader for accessing all trie nodes with provided state
+	// root. An error will be returned if the requested state is not available.
+	Reader(root common.Hash) (database.Reader, error)
 }
 
 // Database is the wrapper of the underlying backend which is shared by different
@@ -175,13 +176,7 @@ func (db *Database) DiskDB() ethdb.Database {
 // Reader returns a reader for accessing all trie nodes with provided state root.
 // An error will be returned if the requested state is not available.
 func (db *Database) Reader(blockRoot common.Hash) (database.Reader, error) {
-	switch b := db.backend.(type) {
-	case *hashdb.Database:
-		return b.Reader(blockRoot)
-	case *pathdb.Database:
-		return b.Reader(blockRoot)
-	}
-	return nil, errors.New("unknown backend")
+	return db.backend.Reader(blockRoot)
 }
 
 // Update performs a state transition by committing dirty nodes contained in the
@@ -231,7 +226,10 @@ func (db *Database) Initialized(genesisRoot common.Hash) bool {
 
 // Scheme returns the node scheme used in the database.
 func (db *Database) Scheme() string {
-	return db.backend.Scheme()
+	if db.config.PathDB != nil {
+		return rawdb.PathScheme
+	}
+	return rawdb.HashScheme
 }
 
 // Close flushes the dangling preimages to disk and closes the trie database.
@@ -315,14 +313,7 @@ func (db *Database) Recover(target common.Hash) error {
 	if !ok {
 		return errors.New("not supported")
 	}
-	var loader triestate.TrieLoader
-	if db.config.IsVerkle {
-		// TODO define verkle loader
-		log.Crit("Verkle loader is not defined")
-	} else {
-		loader = trie.NewMerkleLoader(db)
-	}
-	return pdb.Recover(target, loader)
+	return pdb.Recover(target)
 }
 
 // Recoverable returns the indicator if the specified state is enabled to be

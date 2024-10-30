@@ -34,11 +34,14 @@ import (
 	"github.com/olekukonko/tablewriter"
 )
 
-// freezerdb is a database wrapper that enables freezer data retrievals.
+// freezerdb is a database wrapper that enables ancient chain segment freezing.
 type freezerdb struct {
-	ancientRoot string
 	ethdb.KeyValueStore
 	ethdb.AncientStore
+
+	readOnly    bool
+	ancientRoot string
+
 	ethdb.AncientFreezer
 	diffStore  ethdb.KeyValueStore
 	stateStore ethdb.Database
@@ -154,7 +157,7 @@ func (frdb *freezerdb) HasSeparateBlockStore() bool {
 // a freeze cycle completes, without having to sleep for a minute to trigger the
 // automatic background run.
 func (frdb *freezerdb) Freeze(threshold uint64) error {
-	if frdb.AncientStore.(*chainFreezer).readonly {
+	if frdb.readOnly {
 		return errReadOnly
 	}
 	// Set the freezer threshold to a temporary value
@@ -493,6 +496,14 @@ func resolveChainFreezerDir(ancient string) string {
 // storage. The passed ancient indicates the path of root ancient directory
 // where the chain freezer can be opened.
 func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace string, readonly, disableFreeze, isLastOffset, pruneAncientData, multiDatabase bool) (ethdb.Database, error) {
+	// Create the idle freezer instance. If the given ancient directory is empty,
+	// in-memory chain freezer is used (e.g. dev mode); otherwise the regular
+	// file-based freezer is created.
+	chainFreezerDir := ancient
+	if chainFreezerDir != "" {
+		chainFreezerDir = resolveChainFreezerDir(chainFreezerDir)
+	}
+
 	var offset uint64
 	// The offset of ancientDB should be handled differently in different scenarios.
 	if isLastOffset {
@@ -636,7 +647,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 		WriteAncientType(db, EntireFreezerType)
 	}
 	// Freezer is consistent with the key-value database, permit combining the two
-	if !disableFreeze && !frdb.readonly {
+	if !disableFreeze && readonly {
 		frdb.wg.Add(1)
 		go func() {
 			frdb.freeze(db)
