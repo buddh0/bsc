@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/systemcontracts"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -82,7 +83,6 @@ var (
 	accountCommitTimer = metrics.NewRegisteredResettingTimer("chain/account/commits", nil)
 
 	storageReadTimer   = metrics.NewRegisteredResettingTimer("chain/storage/reads", nil)
-	storageHashTimer   = metrics.NewRegisteredResettingTimer("chain/storage/hashes", nil)
 	storageUpdateTimer = metrics.NewRegisteredResettingTimer("chain/storage/updates", nil)
 	storageCommitTimer = metrics.NewRegisteredResettingTimer("chain/storage/commits", nil)
 
@@ -118,7 +118,6 @@ const (
 	txLookupCacheLimit  = 1024
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
-	TriesInMemory       = 128
 	maxBeyondBlocks     = 2048
 	prefetchTxNumber    = 100
 
@@ -384,18 +383,18 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		diffQueueBuffer:    make(chan *types.DiffLayer),
 		logger:             vmConfig.Tracer,
 	}
-	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
-	bc.forker = NewForkChoice(bc, shouldPreserve)
-	bc.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
-	bc.validator = NewBlockValidator(chainConfig, bc, engine)
-	bc.prefetcher = NewStatePrefetcher(chainConfig, bc, engine)
-	bc.processor = NewStateProcessor(chainConfig, bc, engine)
-
 	var err error
 	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.insertStopped)
 	if err != nil {
 		return nil, err
 	}
+	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
+	bc.forker = NewForkChoice(bc, shouldPreserve)
+	bc.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
+	bc.validator = NewBlockValidator(chainConfig, bc)
+	bc.prefetcher = NewStatePrefetcher(chainConfig, bc.hc)
+	bc.processor = NewStateProcessor(chainConfig, bc.hc)
+
 	bc.genesisBlock = bc.GetBlockByNumber(0)
 	if bc.genesisBlock == nil {
 		return nil, ErrNoGenesis
@@ -1369,7 +1368,7 @@ func (bc *BlockChain) Stop() {
 		if !bc.cacheConfig.TrieDirtyDisabled {
 			triedb := bc.triedb
 			var once sync.Once
-			for _, offset := range []uint64{0, 1, bc.TriesInMemory() - 1} {
+			for _, offset := range []uint64{0, 1, state.TriesInMemory - 1} {
 				if number := bc.CurrentBlock().Number.Uint64(); number > offset {
 					recent := bc.GetBlockByNumber(number - offset)
 					log.Info("Writing cached state to disk", "block", recent.Number(), "hash", recent.Hash(), "root", recent.Root())
@@ -1583,8 +1582,8 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 		// Delete block data from the main database.
 		var (
-			canonHashes = make(map[common.Hash]struct{})
 			blockBatch  = bc.db.BlockStore().NewBatch()
+			canonHashes = make(map[common.Hash]struct{}, len(blockChain))
 		)
 		for _, block := range blockChain {
 			canonHashes[block.Hash()] = struct{}{}
@@ -1748,11 +1747,11 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 
 // writeBlockWithState writes block, metadata and corresponding state data to the
 // database.
-func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) error {
+func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, statedb *state.StateDB) error {
 	// Calculate the total difficulty of the block
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 	if ptd == nil {
-		state.StopPrefetcher()
+		statedb.StopPrefetcher()
 		return consensus.ErrUnknownAncestor
 	}
 	// Make sure no inconsistent state is leaked during insertion
@@ -1774,9 +1773,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			rawdb.WriteBlobSidecars(blockBatch, block.Hash(), block.NumberU64(), block.Sidecars())
 		}
 		if bc.db.StateStore() != nil {
-			rawdb.WritePreimages(bc.db.StateStore(), state.Preimages())
+			rawdb.WritePreimages(bc.db.StateStore(), statedb.Preimages())
 		} else {
-			rawdb.WritePreimages(blockBatch, state.Preimages())
+			rawdb.WritePreimages(blockBatch, statedb.Preimages())
 		}
 		if err := blockBatch.Write(); err != nil {
 			log.Crit("Failed to write block into disk", "err", err)
@@ -1811,7 +1810,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 		// Flush limits are not considered for the first TriesInMemory blocks.
 		current := block.NumberU64()
-		if current <= bc.TriesInMemory() {
+		if current <= state.TriesInMemory {
 			return nil
 		}
 		// If we exceeded our memory allowance, flush matured singleton nodes to disk
@@ -1823,7 +1822,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			triedb.Cap(limit - ethdb.IdealBatchSize)
 		}
 		// Find the next state trie we need to commit
-		chosen := current - bc.triesInMemory
+		chosen := current - state.TriesInMemory
 		flushInterval := time.Duration(bc.flushInterval.Load())
 		// If we exceeded out time allowance, flush an entire trie to disk
 		if bc.gcproc > flushInterval {
@@ -1842,8 +1841,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				} else {
 					// If we're exceeding limits but haven't reached a large enough memory gap,
 					// warn the user that the system is becoming unstable.
-					if chosen < bc.lastWrite+bc.triesInMemory && bc.gcproc >= 2*flushInterval {
-						log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", flushInterval, "optimum", float64(chosen-bc.lastWrite)/float64(bc.triesInMemory))
+					if chosen < bc.lastWrite+state.TriesInMemory && bc.gcproc >= 2*flushInterval {
+						log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", flushInterval, "optimum", float64(chosen-bc.lastWrite)/float64(state.TriesInMemory))
 					}
 					// Flush an entire trie and restart the counters
 					triedb.Commit(header.Root, true)
@@ -1871,7 +1870,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		return nil
 	}
 	// Commit all cached state changes into underlying memory database.
-	_, diffLayer, err := state.Commit(block.NumberU64(), tryCommitTrieDB)
+	_, diffLayer, err := statedb.Commit(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()), tryCommitTrieDB)
 	if err != nil {
 		return err
 	}
@@ -2233,13 +2232,24 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		bc.updateHighestVerifiedHeader(block.Header())
 		statedb.SetLogger(bc.logger)
 
-		// Enable prefetching to pull in trie node paths while processing transactions
-		statedb.StartPrefetcher("chain")
+		// If we are past Byzantium, enable prefetching to pull in trie node paths
+		// while processing transactions. Before Byzantium the prefetcher is mostly
+		// useless due to the intermediate root hashing after each transaction.
+		if bc.chainConfig.IsByzantium(block.Number()) {
+			var witness *stateless.Witness
+			if bc.vmConfig.EnableWitnessCollection {
+				witness, err = stateless.NewWitness(bc, block)
+				if err != nil {
+					return it.index, err
+				}
+			}
+			statedb.StartPrefetcher("chain", witness)
+		}
+
 		interruptCh := make(chan struct{})
 		// For diff sync, it may fallback to full sync, so we still do prefetch
 		if len(block.Transactions()) >= prefetchTxNumber {
 			// do Prefetch in a separate goroutine to avoid blocking the critical path
-
 			// 1.do state prefetch for snapshot cache
 			throwaway := statedb.CopyDoPrefetch()
 			// Disable tracing for prefetcher executions.
@@ -2380,12 +2390,19 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 
 	// Validate the state using the default validator
 	vstart := time.Now()
-	if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
+	if err := bc.validator.ValidateState(block, statedb, receipts, usedGas, false); err != nil {
 		bc.reportBlock(block, receipts, err)
 		statedb.StopPrefetcher()
 		return nil, err
 	}
 	vtime := time.Since(vstart)
+
+	if witness := statedb.Witness(); witness != nil {
+		if err = bc.validator.ValidateWitness(witness, block.ReceiptHash(), block.Root()); err != nil {
+			bc.reportBlock(block, receipts, err)
+			return nil, fmt.Errorf("cross verification failed: %v", err)
+		}
+	}
 	proctime := time.Since(start) // processing + validation
 
 	// Update the metrics touched during block processing and validation
@@ -2396,8 +2413,7 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 	accountUpdateTimer.Update(statedb.AccountUpdates)               // Account updates are complete(in validation)
 	storageUpdateTimer.Update(statedb.StorageUpdates)               // Storage updates are complete(in validation)
 	accountHashTimer.Update(statedb.AccountHashes)                  // Account hashes are complete(in validation)
-	storageHashTimer.Update(statedb.StorageHashes)                  // Storage hashes are complete(in validation)
-	triehash := statedb.AccountHashes + statedb.StorageHashes       // The time spent on tries hashing
+	triehash := statedb.AccountHashes                               // The time spent on tries hashing
 	trieUpdate := statedb.AccountUpdates + statedb.StorageUpdates   // The time spent on tries update
 	trieRead := statedb.SnapshotAccountReads + statedb.AccountReads // The time spent on account read
 	trieRead += statedb.SnapshotStorageReads + statedb.StorageReads // The time spent on storage read
@@ -2424,7 +2440,7 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 	snapshotCommitTimer.Update(statedb.SnapshotCommits) // Snapshot commits are complete, we can mark them
 	triedbCommitTimer.Update(statedb.TrieDBCommits)     // Trie database commits are complete, we can mark them
 
-	blockWriteTimer.Update(time.Since(wstart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits - statedb.TrieDBCommits)
+	blockWriteTimer.Update(time.Since(wstart) - max(statedb.AccountCommits, statedb.StorageCommits) /* concurrent */ - statedb.SnapshotCommits - statedb.TrieDBCommits)
 	blockInsertTimer.UpdateSince(start)
 
 	return &blockProcessingResult{usedGas: usedGas, procTime: proctime, status: status}, nil
@@ -3104,7 +3120,10 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header) (int, error) {
 	return 0, err
 }
 
-func (bc *BlockChain) TriesInMemory() uint64 { return bc.triesInMemory }
+func (bc *BlockChain) HeadChain() *HeaderChain {
+	return bc.hc
+}
+func (bc *BlockChain) TriesInMemory() uint64 { return state.TriesInMemory }
 
 func EnablePersistDiff(limit uint64) BlockChainOption {
 	return func(chain *BlockChain) (*BlockChain, error) {
@@ -3113,7 +3132,7 @@ func EnablePersistDiff(limit uint64) BlockChainOption {
 	}
 }
 
-func EnableBlockValidator(chainConfig *params.ChainConfig, engine consensus.Engine, mode VerifyMode, peers verifyPeers) BlockChainOption {
+func EnableBlockValidator(chainConfig *params.ChainConfig, _ consensus.Engine, mode VerifyMode, peers verifyPeers) BlockChainOption {
 	return func(bc *BlockChain) (*BlockChain, error) {
 		if mode.NeedRemoteVerify() {
 			vm, err := NewVerifyManager(bc, peers, mode == InsecureVerify)
@@ -3121,7 +3140,7 @@ func EnableBlockValidator(chainConfig *params.ChainConfig, engine consensus.Engi
 				return nil, err
 			}
 			go vm.mainLoop()
-			bc.validator = NewBlockValidator(chainConfig, bc, engine, EnableRemoteVerifyManager(vm))
+			bc.validator = NewBlockValidator(chainConfig, bc, EnableRemoteVerifyManager(vm))
 		}
 		return bc, nil
 	}

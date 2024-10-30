@@ -1442,7 +1442,7 @@ func (p *Parlia) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *
 		wg.Done()
 	}()
 	go func() {
-		blk = types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
+		blk = types.NewBlock(header, &types.Body{Transactions: txs}, receipts, trie.NewStackTrie(nil))
 		wg.Done()
 	}()
 	wg.Wait()

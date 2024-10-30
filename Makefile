@@ -2,7 +2,7 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: geth all test truffle-test lint clean devtools help
+.PHONY: geth faucet all test truffle-test lint fmt clean devtools help
 .PHONY: docker
 
 GOBIN = ./build/bin
@@ -11,7 +11,7 @@ GORUN = go run
 GIT_COMMIT=$(shell git rev-parse HEAD)
 GIT_COMMIT_DATE=$(shell git log -n1 --pretty='format:%cd' --date=format:'%Y%m%d')
 
-#? geth: Build geth
+#? geth: Build geth.
 geth:
 	$(GORUN) build/ci.go install ./cmd/geth
 	@echo "Done building."
@@ -22,11 +22,11 @@ faucet:
 	$(GORUN) build/ci.go install ./cmd/faucet
 	@echo "Done building faucet"
 
-#? all: Build all packages and executables
+#? all: Build all packages and executables.
 all:
 	$(GORUN) build/ci.go install
 
-#? test: Run the tests
+#? test: Run the tests.
 test: all
 	$(GORUN) build/ci.go test -timeout 1h
 
@@ -40,11 +40,15 @@ truffle-test:
 	docker compose -f ./tests/truffle/docker-compose.yml up --exit-code-from truffle-test truffle-test
 	docker compose -f ./tests/truffle/docker-compose.yml down
 
-#? lint: Run certain pre-selected linters
+#? lint: Run certain pre-selected linters.
 lint: ## Run linters.
 	$(GORUN) build/ci.go lint
 
-#? clean: Clean go cache, built executables, and the auto generated folder
+#? fmt: Ensure consistent code formatting.
+fmt:
+	gofmt -s -w $(shell find . -name "*.go")
+
+#? clean: Clean go cache, built executables, and the auto generated folder.
 clean:
 	go clean -cache
 	rm -fr build/_workspace/pkg/ $(GOBIN)/*
@@ -52,7 +56,7 @@ clean:
 # The devtools target installs tools required for 'go generate'.
 # You need to put $GOBIN (or $GOPATH/bin) in your PATH to use 'go generate'.
 
-#? devtools: Install recommended developer tools
+#? devtools: Install recommended developer tools.
 devtools:
 	env GOBIN= go install golang.org/x/tools/cmd/stringer@latest
 	env GOBIN= go install github.com/fjl/gencodec@latest
@@ -67,5 +71,9 @@ docker:
 
 #? help: Get more info on make commands.
 help: Makefile
-	@echo " Choose a command run in go-ethereum:"
+	@echo ''
+	@echo 'Usage:'
+	@echo '  make [target]'
+	@echo ''
+	@echo 'Targets:'
 	@sed -n 's/^#?//p' $< | column -t -s ':' |  sort | sed -e 's/^/ /'

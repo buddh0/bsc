@@ -400,7 +400,7 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	// Assign the final state root to header.
 	header.Root = state.IntermediateRoot(true)
 
-	return types.NewBlockWithWithdrawals(header, txs, uncles, receipts, withdrawals, trie.NewStackTrie(nil)), receipts, nil
+	return types.NewBlock(header, &types.Body{Transactions: txs, Uncles: uncles, Withdrawals: withdrawals}, receipts, trie.NewStackTrie(nil)), receipts, nil
 }
 
 // Seal generates a new sealing request for the given input block and pushes
