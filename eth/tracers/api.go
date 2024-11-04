@@ -408,6 +408,12 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, api.backend.ChainConfig(), vm.Config{})
 				core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
 			}
+			// Insert parent hash in history contract.
+			if api.backend.ChainConfig().IsPrague(next.Number(), next.Time()) {
+				context := core.NewEVMBlockContext(next.Header(), api.chainContext(ctx), nil)
+				vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, api.backend.ChainConfig(), vm.Config{})
+				core.ProcessParentBlockHash(next.ParentHash(), vmenv, statedb)
+			}
 			// Clean out any pending release functions of trace state. Note this
 			// step must be done after constructing tracing state, because the
 			// tracing state of block next depends on the parent state and construction
@@ -572,6 +578,9 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		vmenv := vm.NewEVM(vmctx, vm.TxContext{}, statedb, chainConfig, vm.Config{})
 		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
 	}
+	if chainConfig.IsPrague(block.Number(), block.Time()) {
+		core.ProcessParentBlockHash(block.ParentHash(), vm.NewEVM(vmctx, vm.TxContext{}, statedb, chainConfig, vm.Config{}), statedb)
+	}
 	for i, tx := range block.Transactions() {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -676,6 +685,10 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		vmenv := vm.NewEVM(blockCtx, vm.TxContext{}, statedb, api.backend.ChainConfig(), vm.Config{})
 		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
+	}
+	if api.backend.ChainConfig().IsPrague(block.Number(), block.Time()) {
+		vmenv := vm.NewEVM(blockCtx, vm.TxContext{}, statedb, api.backend.ChainConfig(), vm.Config{})
+		core.ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
 	}
 	for i, tx := range txs {
 		// upgrade build-in system contract before system txs if Feynman is enabled
@@ -885,6 +898,10 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		vmenv := vm.NewEVM(vmctx, vm.TxContext{}, statedb, chainConfig, vm.Config{})
 		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
+	}
+	if chainConfig.IsPrague(block.Number(), block.Time()) {
+		vmenv := vm.NewEVM(vmctx, vm.TxContext{}, statedb, chainConfig, vm.Config{})
+		core.ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
 	}
 	for i, tx := range block.Transactions() {
 		// upgrade build-in system contract before system txs if Feynman is enabled

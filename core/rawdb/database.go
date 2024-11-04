@@ -329,12 +329,6 @@ func (db *nofreezedb) AncientOffSet() uint64 {
 	return 0
 }
 
-// MigrateTable processes the entries in a given table in sequence
-// converting them to a new format if they're of an old format.
-func (db *nofreezedb) MigrateTable(kind string, convert convertLegacyFn) error {
-	return errNotSupported
-}
-
 // AncientDatadir returns an error as we don't have a backing chain freezer.
 func (db *nofreezedb) AncientDatadir() (string, error) {
 	return "", errNotSupported
@@ -435,11 +429,6 @@ func (db *emptyfreezedb) ReadAncients(fn func(reader ethdb.AncientReaderOp) erro
 }
 func (db *emptyfreezedb) AncientOffSet() uint64 { return 0 }
 
-// MigrateTable returns nil for pruned db that we don't have a backing chain freezer.
-func (db *emptyfreezedb) MigrateTable(kind string, convert convertLegacyFn) error {
-	return nil
-}
-
 // AncientDatadir returns nil for pruned db that we don't have a backing chain freezer.
 func (db *emptyfreezedb) AncientDatadir() (string, error) {
 	return "", nil
@@ -477,7 +466,7 @@ func resolveChainFreezerDir(ancient string) string {
 	// - chain freezer is not initialized
 	// - chain freezer exists in legacy location (root ancient folder)
 	chain := filepath.Join(ancient, ChainFreezerName)
-	state := filepath.Join(ancient, StateFreezerName)
+	state := filepath.Join(ancient, MerkleStateFreezerName)
 	if common.FileExist(chain) {
 		return chain
 	}
@@ -955,6 +944,10 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		cliqueSnaps     stat
 		parliaSnaps     stat
 
+		// Verkle statistics
+		verkleTries        stat
+		verkleStateLookups stat
+
 		// Les statistic
 		chtTrieNodes   stat
 		bloomTrieNodes stat
@@ -1024,6 +1017,24 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			bytes.HasPrefix(key, BloomTrieIndexPrefix) ||
 			bytes.HasPrefix(key, BloomTriePrefix): // Bloomtrie sub
 			bloomTrieNodes.Add(size)
+
+		// Verkle trie data is detected, determine the sub-category
+		case bytes.HasPrefix(key, VerklePrefix):
+			remain := key[len(VerklePrefix):]
+			switch {
+			case IsAccountTrieNode(remain):
+				verkleTries.Add(size)
+			case bytes.HasPrefix(remain, stateIDPrefix) && len(remain) == len(stateIDPrefix)+common.HashLength:
+				verkleStateLookups.Add(size)
+			case bytes.Equal(remain, persistentStateIDKey):
+				metadata.Add(size)
+			case bytes.Equal(remain, trieJournalKey):
+				metadata.Add(size)
+			case bytes.Equal(remain, snapSyncStatusFlagKey):
+				metadata.Add(size)
+			default:
+				unaccounted.Add(size)
+			}
 		default:
 			var accounted bool
 			for _, meta := range [][]byte{
@@ -1154,6 +1165,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Path trie state lookups", stateLookups.Size(), stateLookups.Count()},
 		{"Key-Value store", "Path trie account nodes", accountTries.Size(), accountTries.Count()},
 		{"Key-Value store", "Path trie storage nodes", storageTries.Size(), storageTries.Count()},
+		{"Key-Value store", "Verkle trie nodes", verkleTries.Size(), verkleTries.Count()},
+		{"Key-Value store", "Verkle trie state lookups", verkleStateLookups.Size(), verkleStateLookups.Count()},
 		{"Key-Value store", "Trie preimages", preimages.Size(), preimages.Count()},
 		{"Key-Value store", "Account snapshot", accountSnaps.Size(), accountSnaps.Count()},
 		{"Key-Value store", "Storage snapshot", storageSnaps.Size(), storageSnaps.Count()},
