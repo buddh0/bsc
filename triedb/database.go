@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
 	"github.com/ethereum/go-ethereum/triedb/database"
@@ -46,7 +45,16 @@ type Config struct {
 // default settings.
 var HashDefaults = &Config{
 	Preimages: false,
+	IsVerkle:  false,
 	HashDB:    hashdb.Defaults,
+}
+
+// VerkleDefaults represents a config for holding verkle trie data
+// using path-based scheme with default settings.
+var VerkleDefaults = &Config{
+	Preimages: false,
+	IsVerkle:  true,
+	PathDB:    pathdb.Defaults,
 }
 
 // backend defines the methods needed to access/update trie nodes in different
@@ -126,7 +134,7 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 	}
 	db := &Database{
 		config:    config,
-		diskdb:    triediskdb,
+		diskdb:    diskdb,
 		preimages: preimages,
 	}
 	/*
@@ -138,7 +146,7 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 		if rawdb.ReadStateScheme(triediskdb) == rawdb.PathScheme {
 			log.Warn("Incompatible state scheme", "old", rawdb.PathScheme, "new", rawdb.HashScheme)
 		}
-		db.backend = hashdb.New(triediskdb, config.HashDB, trie.MerkleResolver{})
+		db.backend = hashdb.New(triediskdb, config.HashDB)
 	} else if config.PathDB != nil {
 		if rawdb.ReadStateScheme(triediskdb) == rawdb.HashScheme {
 			log.Warn("Incompatible state scheme", "old", rawdb.HashScheme, "new", rawdb.PathScheme)
@@ -150,17 +158,10 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 		}
 		db.backend = pathdb.New(triediskdb, config.PathDB, config.IsVerkle)
 	} else {
-		var resolver hashdb.ChildResolver
-		if config.IsVerkle {
-			// TODO define verkle resolver
-			log.Crit("verkle does not use a hash db")
-		} else {
-			resolver = trie.MerkleResolver{}
-		}
 		if config.HashDB == nil {
 			config.HashDB = hashdb.Defaults
 		}
-		db.backend = hashdb.New(triediskdb, config.HashDB, resolver)
+		db.backend = hashdb.New(triediskdb, config.HashDB)
 	}
 	return db
 }

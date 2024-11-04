@@ -153,7 +153,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 		if current = eth.blockchain.GetBlockByNumber(next); current == nil {
 			return nil, nil, fmt.Errorf("block #%d not found", next)
 		}
-		statedb, _, _, _, err := eth.blockchain.Processor().Process(current, statedb, vm.Config{})
+		_, err := eth.blockchain.Processor().Process(current, statedb, vm.Config{})
 		if err != nil {
 			return nil, nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(), err)
 		}
@@ -249,6 +249,12 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
 		vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, eth.blockchain.Config(), vm.Config{})
 		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
+	}
+	// If prague hardfork, insert parent block hash in the state as per EIP-2935.
+	if eth.blockchain.Config().IsPrague(block.Number(), block.Time()) {
+		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
+		vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, eth.blockchain.Config(), vm.Config{})
+		core.ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
 	}
 	if txIndex == 0 && len(block.Transactions()) == 0 {
 		return nil, vm.BlockContext{}, statedb, release, nil

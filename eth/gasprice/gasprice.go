@@ -45,7 +45,6 @@ type Config struct {
 	Percentile       int
 	MaxHeaderHistory uint64
 	MaxBlockHistory  uint64
-	Default          *big.Int `toml:",omitempty"`
 	MaxPrice         *big.Int `toml:",omitempty"`
 	IgnorePrice      *big.Int `toml:",omitempty"`
 	OracleThreshold  int      `toml:",omitempty"`
@@ -82,7 +81,7 @@ type Oracle struct {
 
 // NewOracle returns a new gasprice oracle which can recommend suitable
 // gasprice for newly created transaction.
-func NewOracle(backend OracleBackend, params Config) *Oracle {
+func NewOracle(backend OracleBackend, params Config, startPrice *big.Int) *Oracle {
 	blocks := params.Blocks
 	if blocks < 1 {
 		blocks = 1
@@ -118,6 +117,9 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 		maxBlockHistory = 1
 		log.Warn("Sanitizing invalid gasprice oracle max block history", "provided", params.MaxBlockHistory, "updated", maxBlockHistory)
 	}
+	if startPrice == nil {
+		startPrice = new(big.Int)
+	}
 
 	cache := lru.NewCache[cacheKey, processedFees](2048)
 	headEvent := make(chan core.ChainHeadEvent, 1)
@@ -134,7 +136,7 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 
 	return &Oracle{
 		backend:           backend,
-		lastPrice:         params.Default,
+		lastPrice:         startPrice,
 		maxPrice:          maxPrice,
 		ignorePrice:       ignorePrice,
 		checkBlocks:       blocks,
@@ -143,7 +145,7 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 		maxBlockHistory:   maxBlockHistory,
 		historyCache:      cache,
 		sampleTxThreshold: params.OracleThreshold,
-		defaultPrice:      params.Default,
+		defaultPrice:      startPrice,
 	}
 }
 
