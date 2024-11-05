@@ -237,7 +237,7 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 		// if the triePrefetcher is active, fetches will not be used in mainLoop
 		// otherwise, inactive triePrefetcher is readonly, it won't modify fetches
 		for root, fetch := range p.fetches {
-			fetcherCopied.fetches[root] = p.db.CopyTrie(fetch)
+			fetcherCopied.fetches[root] = mustCopyTrie(fetch)
 		}
 		return fetcherCopied
 	}
@@ -298,7 +298,7 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 		if trie == nil {
 			return nil
 		}
-		return p.db.CopyTrie(trie)
+		return mustCopyTrie(trie)
 	}
 
 	// use lock instead of request to mainLoop by chan to get the fetcher for performance concern.
@@ -474,7 +474,7 @@ func (sf *subfetcher) peek() Trie {
 		if sf.trie == nil {
 			return nil
 		}
-		return sf.db.CopyTrie(sf.trie)
+		return mustCopyTrie(sf.trie)
 	}
 }
 
@@ -564,7 +564,7 @@ func (sf *subfetcher) loop() {
 
 				case ch := <-sf.copy:
 					// Somebody wants a copy of the current trie, grant them
-					ch <- sf.db.CopyTrie(sf.trie)
+					ch <- mustCopyTrie(sf.trie)
 
 				default:
 					// No termination request yet, prefetch the next entry
@@ -584,7 +584,7 @@ func (sf *subfetcher) loop() {
 
 		case ch := <-sf.copy:
 			// Somebody wants a copy of the current trie, grant them
-			ch <- sf.db.CopyTrie(sf.trie)
+			ch <- mustCopyTrie(sf.trie)
 
 		case <-sf.stop:
 			// Termination is requested, abort and leave remaining tasks

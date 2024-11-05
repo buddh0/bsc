@@ -26,27 +26,25 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 )
 
 type stateEnv struct {
-	db    ethdb.Database
 	state *StateDB
 }
 
 func newStateEnv() *stateEnv {
-	db := rawdb.NewMemoryDatabase()
-	sdb, _ := New(types.EmptyRootHash, NewDatabase(db), nil)
-	return &stateEnv{db: db, state: sdb}
+	sdb, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
+	return &stateEnv{state: sdb}
 }
 
 func TestDump(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	tdb := NewDatabaseWithConfig(db, &triedb.Config{Preimages: true})
-	sdb, _ := New(types.EmptyRootHash, tdb, nil)
-	s := &stateEnv{db: db, state: sdb}
+	triedb := triedb.NewDatabase(db, &triedb.Config{Preimages: true})
+	tdb := NewDatabase(triedb, nil)
+	sdb, _ := New(types.EmptyRootHash, tdb)
+	s := &stateEnv{state: sdb}
 
 	// generate a few entries
 	obj1 := s.state.getOrNewStateObject(common.BytesToAddress([]byte{0x01}))
@@ -64,7 +62,7 @@ func TestDump(t *testing.T) {
 	root, _, _ := s.state.Commit(0, nil)
 
 	// check that DumpToCollector contains the state objects that are in trie
-	s.state, _ = New(root, tdb, nil)
+	s.state, _ = New(root, tdb)
 	got := string(s.state.Dump(nil))
 	want := `{
     "root": "71edff0130dd2385947095001c73d9e28d862fc286fca2b922ca6f6f3cddfdd2",
@@ -103,9 +101,10 @@ func TestDump(t *testing.T) {
 
 func TestIterativeDump(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	tdb := NewDatabaseWithConfig(db, &triedb.Config{Preimages: true})
-	sdb, _ := New(types.EmptyRootHash, tdb, nil)
-	s := &stateEnv{db: db, state: sdb}
+	triedb := triedb.NewDatabase(db, &triedb.Config{Preimages: true})
+	tdb := NewDatabase(triedb, nil)
+	sdb, _ := New(types.EmptyRootHash, tdb)
+	s := &stateEnv{state: sdb}
 
 	// generate a few entries
 	obj1 := s.state.getOrNewStateObject(common.BytesToAddress([]byte{0x01}))
@@ -120,10 +119,8 @@ func TestIterativeDump(t *testing.T) {
 	// write some of them to the trie
 	s.state.updateStateObject(obj1)
 	s.state.updateStateObject(obj2)
-	s.state.Finalise(false)
-	s.state.AccountsIntermediateRoot()
-	root, _, _ := s.state.Commit(0, nil)
-	s.state, _ = New(root, tdb, nil)
+	root, _, _ := s.state.Commit(0, false)
+	s.state, _ = New(root, tdb)
 
 	b := &bytes.Buffer{}
 	s.state.IterativeDump(nil, json.NewEncoder(b))
@@ -201,7 +198,7 @@ func TestSnapshotEmpty(t *testing.T) {
 }
 
 func TestCreateObjectRevert(t *testing.T) {
-	state, _ := New(types.EmptyRootHash, NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
 	addr := common.BytesToAddress([]byte("so0"))
 	snap := state.Snapshot()
 

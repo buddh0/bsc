@@ -56,13 +56,11 @@ var (
 // freezerTableSize defines the maximum size of freezer data files.
 const freezerTableSize = 2 * 1000 * 1000 * 1000
 
-// Freezer is a memory mapped append-only database to store immutable ordered
-// data into flat files:
+// Freezer is an append-only database to store immutable ordered data into
+// flat files:
 //
-//   - The append-only nature ensures that disk writes are minimized.
-//   - The memory mapping ensures we can max out system memory for caching without
-//     reserving it for go-ethereum. This would also reduce the memory requirements
-//     of Geth, and thus also GC overhead.
+// - The append-only nature ensures that disk writes are minimized.
+// - The in-order data ensures that disk reads are always optimized.
 type Freezer struct {
 	frozen atomic.Uint64 // Number of items already frozen
 	tail   atomic.Uint64 // Number of the first stored item in the freezer
@@ -186,7 +184,7 @@ func openAdditionTable(datadir, name string, readMeter, writeMeter metrics.Meter
 	return newTable(datadir, name, readMeter, writeMeter, sizeGauge, maxTableSize, disableSnappy, readonly)
 }
 
-// Close terminates the chain freezer, unmapping all the data files.
+// Close terminates the chain freezer, closing all the data files.
 func (f *Freezer) Close() error {
 	f.writeLock.Lock()
 	defer f.writeLock.Unlock()

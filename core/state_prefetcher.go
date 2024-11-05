@@ -69,7 +69,8 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 					tx := transactions[txIndex]
 					// Convert the transaction into an executable message and pre-cache its sender
 					msg, err := TransactionToMessage(tx, signer, header.BaseFee)
-					msg.SkipAccountChecks = true
+					msg.SkipNonceChecks = true
+					msg.SkipFromEOACheck = true
 					if err != nil {
 						return // Also invalid block, bail out
 					}
@@ -117,7 +118,8 @@ func (p *statePrefetcher) PrefetchMining(txs TransactionsByPriceAndNonce, header
 				case tx := <-startCh:
 					// Convert the transaction into an executable message and pre-cache its sender
 					msg, err := TransactionToMessage(tx, signer, header.BaseFee)
-					msg.SkipAccountChecks = true
+					msg.SkipNonceChecks = true
+					msg.SkipFromEOACheck = true
 					if err != nil {
 						return // Also invalid block, bail out
 					}
