@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/parlia"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/systemcontracts"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -104,6 +105,8 @@ type environment struct {
 	receipts []*types.Receipt
 	sidecars types.BlobSidecars
 	blobs    int
+
+	witness *stateless.Witness
 }
 
 // copy creates a deep copy of environment.
@@ -172,6 +175,9 @@ type newPayloadResult struct {
 	block    *types.Block
 	fees     *big.Int           // total block fees
 	sidecars types.BlobSidecars // collected blobs of blob transactions
+	stateDB  *state.StateDB     // StateDB after executing the transactions
+	receipts []*types.Receipt   // Receipts collected during construction
+	witness  *stateless.Witness // Witness is an optional stateless proof
 }
 
 // getWorkReq represents a request for getting a new sealing work with provided parameters.
@@ -493,7 +499,7 @@ func (w *worker) mainLoop() {
 			w.commitWork(req.interruptCh, req.timestamp)
 
 		case req := <-w.getWorkCh:
-			req.result <- w.generateWork(req.params)
+			req.result <- w.generateWork(req.params, false)
 
 		// System stopped
 		case <-w.exitCh:
@@ -657,12 +663,19 @@ func (w *worker) resultLoop() {
 
 // makeEnv creates a new environment for the sealing block.
 func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase common.Address,
-	prevEnv *environment) (*environment, error) {
+	prevEnv *environment, witness bool) (*environment, error) {
 	// Retrieve the parent state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit
 	state, err := w.chain.StateAt(parent.Root)
 	if err != nil {
 		return nil, err
+	}
+	if witness {
+		bundle, err := stateless.NewWitness(header, w.chain)
+		if err != nil {
+			return nil, err
+		}
+		state.StartPrefetcher("miner", bundle)
 	}
 	if prevEnv == nil {
 		state.StartPrefetcher("miner", nil)
@@ -676,6 +689,7 @@ func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase co
 		state:    state,
 		coinbase: coinbase,
 		header:   header,
+		witness:  state.Witness(),
 	}
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
@@ -941,7 +955,7 @@ type generateParams struct {
 // prepareWork constructs the sealing task according to the given parameters,
 // either based on the last chain head or specified parent. In this function
 // the pending transactions are not filled yet, only the empty task returned.
-func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
+func (w *worker) prepareWork(genParams *generateParams, witness bool) (*environment, error) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
@@ -1016,7 +1030,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	// Could potentially happen if starting to mine in an odd state.
 	// Note genParams.coinbase can be different with header.Coinbase
 	// since clique algorithm can modify the coinbase field in header.
-	env, err := w.makeEnv(parent, header, genParams.coinbase, genParams.prevWork)
+	env, err := w.makeEnv(parent, header, genParams.coinbase, genParams.prevWork, witness)
 	if err != nil {
 		log.Error("Failed to create sealing context", "err", err)
 		return nil, err
@@ -1131,8 +1145,8 @@ func (w *worker) fillTransactions(interruptCh chan int32, env *environment, stop
 }
 
 // generateWork generates a sealing block based on the given parameters.
-func (w *worker) generateWork(params *generateParams) *newPayloadResult {
-	work, err := w.prepareWork(params)
+func (w *worker) generateWork(params *generateParams, witness bool) *newPayloadResult {
+	work, err := w.prepareWork(params, witness)
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
@@ -1154,6 +1168,7 @@ func (w *worker) generateWork(params *generateParams) *newPayloadResult {
 		block:    block,
 		fees:     fees.ToBig(),
 		sidecars: work.sidecars,
+		witness:  work.witness,
 	}
 }
 
@@ -1205,7 +1220,7 @@ LOOP:
 			timestamp: uint64(timestamp),
 			coinbase:  coinbase,
 			prevWork:  prevWork,
-		})
+		}, false)
 		if err != nil {
 			return
 		}

@@ -164,7 +164,7 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 			}
 			return err
 		}
-		statedb, err := state.New(blockchain.GetBlockByHash(block.ParentHash()).Root(), blockchain.stateCache, nil)
+		statedb, err := state.New(blockchain.GetBlockByHash(block.ParentHash()).Root(), blockchain.statedb)
 		if err != nil {
 			return err
 		}
@@ -2143,9 +2143,9 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 //	[ Cn, Cn+1, Cc, Sn+3 ... Sm]
 //	^    ^    ^  pruned
 func TestPrunedImportSide(t *testing.T) {
-	//glogger := log.NewGlogHandler(log.StreamHandler(os.Stdout, log.TerminalFormat(false)))
-	//glogger.Verbosity(3)
-	//log.Root().SetHandler(log.Handler(glogger))
+	// glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, false))
+	// glogger.Verbosity(3)
+	// log.SetDefault(log.NewLogger(glogger))
 	testSideImport(t, 3, 3, -1)
 	testSideImport(t, 3, -3, -1)
 	testSideImport(t, 10, 0, -1)
@@ -2154,9 +2154,9 @@ func TestPrunedImportSide(t *testing.T) {
 }
 
 func TestPrunedImportSideWithMerging(t *testing.T) {
-	//glogger := log.NewGlogHandler(log.StreamHandler(os.Stdout, log.TerminalFormat(false)))
-	//glogger.Verbosity(3)
-	//log.Root().SetHandler(log.Handler(glogger))
+	// glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, false))
+	// glogger.Verbosity(3)
+	// log.SetDefault(log.NewLogger(glogger))
 	testSideImport(t, 3, 3, 0)
 	testSideImport(t, 3, -3, 0)
 	testSideImport(t, 10, 0, 0)
@@ -3652,7 +3652,7 @@ func TestSetCanonical(t *testing.T) {
 }
 
 func testSetCanonical(t *testing.T, scheme string) {
-	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	var (
 		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -3697,7 +3697,7 @@ func testSetCanonical(t *testing.T, scheme string) {
 		gen.AddTx(tx)
 	})
 	for _, block := range side {
-		err := chain.InsertBlockWithoutSetHead(block)
+		_, err := chain.InsertBlockWithoutSetHead(block, false)
 		if err != nil {
 			t.Fatalf("Failed to insert into chain: %v", err)
 		}
@@ -4431,7 +4431,7 @@ func TestEIP6110(t *testing.T) {
 			b.AddTx(tx)
 		}
 	})
-	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{Tracer: logger.NewMarkdownLogger(&logger.Config{DisableStack: true}, os.Stderr).Hooks()}, nil, nil)
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{Tracer: logger.NewMarkdownLogger(&logger.Config{DisableStack: true}, os.Stderr).Hooks()}, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}

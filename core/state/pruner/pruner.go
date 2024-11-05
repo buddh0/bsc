@@ -156,10 +156,10 @@ func NewAllPruner(db ethdb.Database) (*Pruner, error) {
 }
 
 func (p *Pruner) PruneAll(genesis *core.Genesis) error {
-	return pruneAll(p.db, genesis)
+	return p.pruneAll(p.db, genesis)
 }
 
-func pruneAll(maindb ethdb.Database, g *core.Genesis) error {
+func (p *Pruner) pruneAll(maindb ethdb.Database, g *core.Genesis) error {
 	var pruneDB ethdb.Database
 	if maindb != nil && maindb.StateStore() != nil {
 		pruneDB = maindb.StateStore()
@@ -233,7 +233,7 @@ func pruneAll(maindb ethdb.Database, g *core.Genesis) error {
 		}
 		log.Info("Database compaction finished", "elapsed", common.PrettyDuration(time.Since(cstart)))
 	}
-	statedb, _ := state.New(common.Hash{}, state.NewDatabase(maindb), nil)
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(triedb.NewDatabase(maindb, nil), p.snaptree))
 	for addr, account := range g.Alloc {
 		statedb.AddBalance(addr, uint256.MustFromBig(account.Balance), tracing.BalanceChangeUnspecified)
 		statedb.SetCode(addr, account.Code)

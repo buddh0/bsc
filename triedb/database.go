@@ -92,6 +92,7 @@ type backend interface {
 // types of node backend as an entrypoint. It's responsible for all interactions
 // relevant with trie nodes and node preimages.
 type Database struct {
+	disk      ethdb.Database
 	config    *Config        // Configuration for trie database
 	diskdb    ethdb.Database // Persistent database to store the snapshot
 	preimages *preimageStore // The store for caching preimages
@@ -133,6 +134,7 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 		preimages = newPreimageStore(triediskdb)
 	}
 	db := &Database{
+		disk:      diskdb,
 		config:    config,
 		diskdb:    diskdb,
 		preimages: preimages,
@@ -400,4 +402,9 @@ func (db *Database) GetAllRooHash() [][]string {
 // IsVerkle returns the indicator if the database is holding a verkle tree.
 func (db *Database) IsVerkle() bool {
 	return db.config.IsVerkle
+}
+
+// Disk returns the underlying disk database.
+func (db *Database) Disk() ethdb.Database {
+	return db.disk
 }
