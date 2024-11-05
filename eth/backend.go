@@ -301,7 +301,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		chainConfig.VerkleTime = config.OverrideVerkle
 		overrides.OverrideVerkle = config.OverrideVerkle
 	}
-<<<<<<< HEAD
 
 	bcOps := make([]core.BlockChainOption, 0)
 	if config.PersistDiff {
@@ -318,9 +317,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		return false
 	}
 	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, shouldPreserve, &config.TransactionHistory, bcOps...)
-=======
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, &config.TransactionHistory)
->>>>>>> v1.4.11_b0b67be
 	if err != nil {
 		return nil, err
 	}
