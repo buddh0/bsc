@@ -320,7 +320,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 
 	// Commit state mutations into database.
 	st.StateDB.SetExpectedStateRoot(root)
-	root, _ = st.StateDB.Commit(block.NumberU64(), config.IsEIP158(block.Number()))
+	root, _, _ = st.StateDB.Commit(block.NumberU64(), config.IsEIP158(block.Number()))
 	if tracer := evm.Config.Tracer; tracer != nil && tracer.OnTxEnd != nil {
 		receipt := &types.Receipt{GasUsed: vmRet.UsedGas}
 		tracer.OnTxEnd(receipt, nil)
@@ -479,7 +479,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 	// Commit and re-open to start with a clean state.
 	root := statedb.IntermediateRoot(false)
 	statedb.SetExpectedStateRoot(root)
-	root, _, _ = statedb.Commit(0, nil)
+	root, _, _ = statedb.Commit(0, false)
 
 	// If snapshot is requested, initialize the snapshotter and use it in state.
 	var snaps *snapshot.Tree
