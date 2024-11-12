@@ -187,6 +187,7 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 	if err != nil {
 		return nil, err
 	}
+	_, noTrie := tr.(*trie.EmptyTrie)
 	reader, err := db.Reader(root)
 	if err != nil {
 		return nil, err
@@ -194,6 +195,7 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 	sdb := &StateDB{
 		db:                   db,
 		trie:                 tr,
+		noTrie:               noTrie,
 		originalRoot:         root,
 		reader:               reader,
 		stateObjects:         make(map[common.Address]*stateObject, defaultNumOfSlots),
@@ -205,7 +207,6 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
 	}
-	_, sdb.noTrie = tr.(*trie.EmptyTrie)
 	if db.TrieDB().IsVerkle() {
 		sdb.accessEvents = NewAccessEvents(db.PointCache())
 	}
@@ -254,7 +255,7 @@ func (s *StateDB) StartPrefetcher(namespace string, witness *stateless.Witness) 
 	// Enable witness collection if requested
 	s.witness = witness
 
-	s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, common.Hash{}, namespace, witness == nil)
+	s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace, witness == nil)
 
 }
 
