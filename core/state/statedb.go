@@ -915,7 +915,8 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// If there was a trie prefetcher operating, terminate it async so that the
 	// individual storage tries can be updated as soon as the disk load finishes.
 	if s.prefetcher != nil {
-		defer s.StopPrefetcher()
+		// s.prefetcher.terminate(true)
+		defer s.StopPrefetcher() // not async now!
 	}
 	// Process all storage updates concurrently. The state object update root
 	// method will internally call a blocking trie fetch from the prefetcher,
