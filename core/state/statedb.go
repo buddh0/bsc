@@ -1334,20 +1334,22 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 	// Obviously it's not an end of the world issue, just something the original
 	// code didn't anticipate for.
 	workers.Go(func() error {
-		if !s.noTrie {
-			// Write the account trie changes, measuring the amount of wasted time
-			newroot, set := s.trie.Commit(true)
-			root = newroot
-			if s.fullProcessed && s.expectedRoot != root {
-				log.Error("Invalid merkle root", "remote", s.expectedRoot, "local", root)
-				return fmt.Errorf("invalid merkle root (remote: %x local: %x)", s.expectedRoot, root)
-			}
-
-			if err := merge(set); err != nil {
-				return err
-			}
-			s.AccountCommits = time.Since(start)
+		if s.noTrie {
+			root = types.EmptyRootHash
+			return nil
 		}
+		// Write the account trie changes, measuring the amount of wasted time
+		newroot, set := s.trie.Commit(true)
+		root = newroot
+		if s.fullProcessed && s.expectedRoot != root {
+			log.Error("Invalid merkle root", "remote", s.expectedRoot, "local", root)
+			return fmt.Errorf("invalid merkle root (remote: %x local: %x)", s.expectedRoot, root)
+		}
+
+		if err := merge(set); err != nil {
+			return err
+		}
+		s.AccountCommits = time.Since(start)
 		return nil
 	})
 	// Schedule each of the storage tries that need to be updated, so they can
@@ -1358,6 +1360,9 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 	// 2 threads in total. But that kind of depends on the account commit being
 	// more expensive than it should be, so let's fix that and revisit this todo.
 	for addr, op := range s.mutations {
+		if s.noTrie {
+			continue
+		}
 		if op.isDelete() {
 			continue
 		}
@@ -1409,9 +1414,6 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 	s.stateObjectsDestruct = make(map[common.Address]*stateObject)
 
 	origin := s.originalRoot
-	if root == (common.Hash{}) {
-		root = types.EmptyRootHash
-	}
 	s.originalRoot = root
 	return newStateUpdate(origin, root, deletes, updates, nodes), nil
 }
@@ -1458,14 +1460,14 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool) (*stateU
 			// - head-1 layer is paired with HEAD-1 state
 			// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
 			go func() {
-				if err := snap.Cap(ret.root, TriesInMemory); err != nil {
+				if err := snap.Cap(ret.root, snap.CapLimit()); err != nil {
 					log.Warn("Failed to cap snapshot tree", "root", ret.root, "layers", TriesInMemory, "err", err)
 				}
 			}()
 			s.SnapshotCommits += time.Since(start)
 		}
 		// If trie database is enabled, commit the state update as a new layer
-		if db := s.db.TrieDB(); db != nil {
+		if db := s.db.TrieDB(); db != nil && !s.noTrie {
 			start := time.Now()
 			set := triestate.New(ret.accountsOrigin, ret.storagesOrigin)
 			if err := db.Update(ret.root, ret.originRoot, block, ret.nodes, set); err != nil {
