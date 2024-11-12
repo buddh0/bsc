@@ -820,6 +820,14 @@ func (s *StateDB) copyInternal(doPrefetch bool) *StateDB {
 		}
 		state.logs[hash] = cpy
 	}
+
+	state.prefetcher = s.prefetcher
+	if s.prefetcher != nil && !doPrefetch {
+		// If there's a prefetcher running, make an inactive copy of it that can
+		// only access data but does not actively preload (since the user will not
+		// know that they need to explicitly terminate an active copy).
+		state.prefetcher = state.prefetcher.copy()
+	}
 	return state
 }
 
