@@ -781,18 +781,20 @@ func (s *StateDB) copyInternal(doPrefetch bool) *StateDB {
 		logSize:   s.logSize,
 		preimages: maps.Clone(s.preimages),
 
-		// Do we need to copy the access list and transient storage?
-		// In practice: No. At the start of a transaction, these two lists are empty.
-		// In practice, we only ever copy state _between_ transactions/blocks, never
-		// in the middle of a transaction. However, it doesn't cost us much to copy
-		// empty lists, so we do it anyway to not blow up if we ever decide copy them
-		// in the middle of a transaction.
-		accessList:       s.accessList.Copy(),
 		transientStorage: s.transientStorage.Copy(),
 		journal:          s.journal.copy(),
 	}
 	if s.witness != nil {
 		state.witness = s.witness.Copy()
+	}
+	// Do we need to copy the access list and transient storage?
+	// In practice: No. At the start of a transaction, these two lists are empty.
+	// In practice, we only ever copy state _between_ transactions/blocks, never
+	// in the middle of a transaction. However, it doesn't cost us much to copy
+	// empty lists, so we do it anyway to not blow up if we ever decide copy them
+	// in the middle of a transaction.
+	if s.accessList != nil {
+		state.accessList = s.accessList.Copy()
 	}
 	if s.accessEvents != nil {
 		state.accessEvents = s.accessEvents.Copy()
@@ -1051,7 +1053,11 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
 	s.thash = thash
 	s.txIndex = ti
-	s.accessList = nil // can't delete this line now, because StateDB.Prepare is not called before processing a system transaction
+}
+
+// StateDB.Prepare is not called before processing a system transaction, call ClearAccessList instead.
+func (s *StateDB) ClearAccessList() {
+	s.accessList = nil
 }
 
 func (s *StateDB) clearJournalAndRefund() {

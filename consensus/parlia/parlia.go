@@ -2161,6 +2161,8 @@ func applyMessage(
 	if chainConfig.IsCancun(header.Number, header.Time) {
 		rules := vmenv.ChainConfig().Rules(vmenv.Context.BlockNumber, vmenv.Context.Random != nil, vmenv.Context.Time)
 		state.Prepare(rules, msg.From(), vmenv.Context.Coinbase, msg.To(), vm.ActivePrecompiles(rules), msg.AccessList)
+	} else {
+		state.ClearAccessList()
 	}
 	// Increment the nonce for the next transaction
 	state.SetNonce(msg.From(), state.GetNonce(msg.From())+1)
