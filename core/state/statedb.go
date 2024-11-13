@@ -148,7 +148,7 @@ type StateDB struct {
 	journal *journal
 
 	// State witness if cross validation is needed
-	witness *stateless.Witness
+	witness *stateless.Witness // TODO(Nathan): more define the relation with `noTrie`
 
 	// Measurements gathered during execution for debugging purposes
 	// MetricsMux should be used in more places, but will affect on performance, so following meteration is not accruate

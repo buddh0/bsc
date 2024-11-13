@@ -125,7 +125,7 @@ func TestCopyClose(t *testing.T) {
 	}
 }
 
-// TODO: fix Verkle related test cases
+// TODO(Nathan): fix Verkle related test cases
 func testVerklePrefetcher(t *testing.T) {
 	disk := rawdb.NewMemoryDatabase()
 	db := triedb.NewDatabase(disk, triedb.VerkleDefaults)
