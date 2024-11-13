@@ -211,6 +211,11 @@ func (h *Header) EmptyWithdrawalsHash() bool {
 	return h.WithdrawalsHash != nil && *h.WithdrawalsHash == EmptyWithdrawalsHash
 }
 
+// EmptyRequestsHash returns true if the RequestsHash is EmptyRequestsHash.
+func (h *Header) EmptyRequestsHash() bool {
+	return h.RequestsHash != nil && *h.RequestsHash == EmptyRequestsHash
+}
+
 // Body is a simple (mutable, non-safe) data container for storing and moving
 // a block's data contents (transactions and uncles) together.
 type Body struct {
@@ -744,7 +749,32 @@ func SealHash(header *Header, chainId *big.Int) (hash common.Hash) {
 
 func EncodeSigHeader(w io.Writer, header *Header, chainId *big.Int) {
 	var err error
-	if header.ParentBeaconRoot != nil && *header.ParentBeaconRoot == (common.Hash{}) {
+	if header.RequestsHash != nil {
+		err = rlp.Encode(w, []interface{}{
+			chainId,
+			header.ParentHash,
+			header.UncleHash,
+			header.Coinbase,
+			header.Root,
+			header.TxHash,
+			header.ReceiptHash,
+			header.Bloom,
+			header.Difficulty,
+			header.Number,
+			header.GasLimit,
+			header.GasUsed,
+			header.Time,
+			header.Extra[:len(header.Extra)-extraSeal], // this will panic if extra is too short, should check before calling encodeSigHeader
+			header.MixDigest,
+			header.Nonce,
+			header.BaseFee,
+			header.WithdrawalsHash,
+			header.BlobGasUsed,
+			header.ExcessBlobGas,
+			header.ParentBeaconRoot,
+			header.RequestsHash,
+		})
+	} else if header.ParentBeaconRoot != nil && *header.ParentBeaconRoot == (common.Hash{}) {
 		err = rlp.Encode(w, []interface{}{
 			chainId,
 			header.ParentHash,
