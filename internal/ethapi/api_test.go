@@ -65,8 +65,8 @@ import (
 )
 
 var emptyBlob = kzg4844.Blob{}
-var emptyBlobCommit, _ = kzg4844.BlobToCommitment(emptyBlob)
-var emptyBlobProof, _ = kzg4844.ComputeBlobProof(emptyBlob, emptyBlobCommit)
+var emptyBlobCommit, _ = kzg4844.BlobToCommitment(&emptyBlob)
+var emptyBlobProof, _ = kzg4844.ComputeBlobProof(&emptyBlob, emptyBlobCommit)
 var emptyBlobHash common.Hash = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
 
 func testTransactionMarshal(t *testing.T, tests []txData, config *params.ChainConfig) {
