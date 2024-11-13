@@ -45,7 +45,6 @@ type testBackend struct {
 	txFeed              event.Feed
 	logsFeed            event.Feed
 	rmLogsFeed          event.Feed
-	pendingLogsFeed     event.Feed
 	chainFeed           event.Feed
 	finalizedHeaderFeed event.Feed
 	voteFeed            event.Feed
@@ -172,11 +171,6 @@ func (b *testBackend) ServiceFilter(ctx context.Context, session *bloombits.Matc
 			}
 		}
 	}()
-}
-
-func (b *testBackend) setPending(block *types.Block, receipts types.Receipts) {
-	b.pendingBlock = block
-	b.pendingReceipts = receipts
 }
 
 func newTestFilterSystem(t testing.TB, db ethdb.Database, cfg Config) (*testBackend, *FilterSystem) {

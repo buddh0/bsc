@@ -2507,6 +2507,7 @@ func TestFillBlobTransaction(t *testing.T) {
 		},
 	}
 	for _, tc := range suite {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
