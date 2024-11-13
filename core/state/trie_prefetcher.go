@@ -269,7 +269,6 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 
 	select {
 	case <-p.closeMainChan: // skip closed trie prefetcher
-		// TODO: ignore whether it's terminated?
 	case p.prefetchChan <- &prefetchMsg{owner, root, addr, keys}:
 	}
 	return nil
