@@ -264,7 +264,7 @@ func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscript
 
 // BuildPayload builds the payload according to the provided parameters.
 func (miner *Miner) BuildPayload(args *BuildPayloadArgs, witness bool) (*Payload, error) {
-	return miner.buildPayload(args, witness)
+	return miner.worker.buildPayload(args, witness)
 }
 
 func (miner *Miner) GasCeil() uint64 {
