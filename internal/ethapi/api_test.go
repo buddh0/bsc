@@ -60,11 +60,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var emptyBlob = kzg4844.Blob{}
-var emptyBlobCommit, _ = kzg4844.BlobToCommitment(&emptyBlob)
-var emptyBlobProof, _ = kzg4844.ComputeBlobProof(&emptyBlob, emptyBlobCommit)
-var emptyBlobHash common.Hash = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
-
 func testTransactionMarshal(t *testing.T, tests []txData, config *params.ChainConfig) {
 	var (
 		signer = types.LatestSigner(config)
@@ -2361,8 +2356,11 @@ func TestFillBlobTransaction(t *testing.T) {
 			Config: params.MergedTestChainConfig,
 			Alloc:  types.GenesisAlloc{},
 		}
-		emptyBlobs                = []kzg4844.Blob{emptyBlob}
-		emptyBlobHash common.Hash = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
+		emptyBlob                      = new(kzg4844.Blob)
+		emptyBlobs                     = []kzg4844.Blob{*emptyBlob}
+		emptyBlobCommit, _             = kzg4844.BlobToCommitment(emptyBlob)
+		emptyBlobProof, _              = kzg4844.ComputeBlobProof(emptyBlob, emptyBlobCommit)
+		emptyBlobHash      common.Hash = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
 	)
 	b := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
 		b.SetPoS()
