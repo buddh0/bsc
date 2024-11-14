@@ -1158,8 +1158,9 @@ func (w *worker) generateWork(params *generateParams, witness bool) *newPayloadR
 			log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(w.recommit))
 		}
 	}
+	body := types.Body{Transactions: work.txs, Withdrawals: params.withdrawals}
 	fees := work.state.GetBalance(consensus.SystemAddress)
-	block, receipts, err := w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, nil, work.receipts, params.withdrawals)
+	block, receipts, err := w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, &body, work.receipts)
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
@@ -1418,10 +1419,12 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		feesInEther := new(big.Float).Quo(new(big.Float).SetInt(fees), big.NewFloat(params.Ether))
 		// Withdrawals are set to nil here, because this is only called in PoW.
 		finalizeStart := time.Now()
-		block, receipts, err := w.engine.FinalizeAndAssemble(w.chain, types.CopyHeader(env.header), env.state, env.txs, nil, env.receipts, nil)
+		body := types.Body{Transactions: env.txs}
+		block, receipts, err := w.engine.FinalizeAndAssemble(w.chain, types.CopyHeader(env.header), env.state, &body, env.receipts)
 		if err != nil {
 			return err
 		}
+		env.txs = body.Transactions
 		env.receipts = receipts
 		finalizeBlockTimer.UpdateSince(finalizeStart)
 
