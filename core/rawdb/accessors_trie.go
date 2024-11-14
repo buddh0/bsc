@@ -281,7 +281,7 @@ func ReadStateScheme(db ethdb.Database) string {
 	}
 	// Check if verkle state in path-based scheme is present.
 	vdb := NewTable(db, string(VerklePrefix))
-	if HasAccountTrieNode(vdb, nil) {
+	if HasAccountTrieNode(vdb.StateStoreReader(), nil) {
 		return PathScheme
 	}
 	// The root node of verkle might be deleted during the initial snap sync,

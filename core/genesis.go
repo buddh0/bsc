@@ -81,7 +81,7 @@ func ReadGenesis(db ethdb.Database) (*Genesis, error) {
 	if (stored == common.Hash{}) {
 		return nil, fmt.Errorf("invalid genesis hash in database: %x", stored)
 	}
-	blob := rawdb.ReadGenesisStateSpec(db, stored)
+	blob := rawdb.ReadGenesisStateSpec(db.BlockStoreReader(), stored)
 	if blob == nil {
 		return nil, errors.New("genesis state missing from db")
 	}
@@ -183,7 +183,7 @@ func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database) (common.Hash, e
 }
 
 func getGenesisState(db ethdb.Database, blockhash common.Hash) (alloc types.GenesisAlloc, err error) {
-	blob := rawdb.ReadGenesisStateSpec(db, blockhash)
+	blob := rawdb.ReadGenesisStateSpec(db.BlockStoreReader(), blockhash)
 	if len(blob) != 0 {
 		if err := alloc.UnmarshalJSON(blob); err != nil {
 			return nil, err
@@ -539,7 +539,7 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 	if err != nil {
 		return nil, err
 	}
-	rawdb.WriteGenesisStateSpec(db, block.Hash(), blob)
+	rawdb.WriteGenesisStateSpec(db.BlockStore(), block.Hash(), blob)
 	rawdb.WriteTd(db.BlockStore(), block.Hash(), block.NumberU64(), block.Difficulty())
 	rawdb.WriteBlock(db.BlockStore(), block)
 	rawdb.WriteReceipts(db.BlockStore(), block.Hash(), block.NumberU64(), nil)
