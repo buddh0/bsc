@@ -156,16 +156,10 @@ func (frdb *freezerdb) HasSeparateBlockStore() bool {
 // Freeze is a helper method used for external testing to trigger and block until
 // a freeze cycle completes, without having to sleep for a minute to trigger the
 // automatic background run.
-func (frdb *freezerdb) Freeze(threshold uint64) error {
+func (frdb *freezerdb) Freeze() error {
 	if frdb.readOnly {
 		return errReadOnly
 	}
-	// Set the freezer threshold to a temporary value
-	defer func(old uint64) {
-		frdb.AncientStore.(*chainFreezer).threshold.Store(old)
-	}(frdb.AncientStore.(*chainFreezer).threshold.Load())
-	frdb.AncientStore.(*chainFreezer).threshold.Store(threshold)
-
 	// Trigger a freeze cycle and block until it's done
 	trigger := make(chan struct{}, 1)
 	frdb.AncientStore.(*chainFreezer).trigger <- trigger
@@ -508,7 +502,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 	}
 
 	if pruneAncientData && !disableFreeze && !readonly {
-		frdb, err := newPrunedFreezer(resolveChainFreezerDir(ancient), db, offset)
+		frdb, err := newPrunedFreezer(chainFreezerDir, db, offset)
 		if err != nil {
 			return nil, err
 		}
@@ -534,7 +528,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 	}
 
 	// Create the idle freezer instance
-	frdb, err := newChainFreezer(resolveChainFreezerDir(ancient), namespace, readonly, offset, multiDatabase)
+	frdb, err := newChainFreezer(chainFreezerDir, namespace, readonly, offset, multiDatabase)
 
 	// We are creating the freezerdb here because the validation logic for db and freezer below requires certain interfaces
 	// that need a database type. Therefore, we are pre-creating it for subsequent use.
