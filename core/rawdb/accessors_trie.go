@@ -281,12 +281,12 @@ func ReadStateScheme(db ethdb.Database) string {
 	}
 	// Check if verkle state in path-based scheme is present.
 	vdb := NewTable(db, string(VerklePrefix))
-	if HasAccountTrieNode(vdb.StateStoreReader(), nil) {
+	if HasAccountTrieNode(vdb, nil) {
 		return PathScheme
 	}
 	// The root node of verkle might be deleted during the initial snap sync,
 	// check the persistent state id then.
-	if id := ReadPersistentStateID(vdb.StateStoreReader()); id != 0 {
+	if id := ReadPersistentStateID(vdb); id != 0 {
 		return PathScheme
 	}
 	// In a hash-based scheme, the genesis state is consistently stored

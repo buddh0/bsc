@@ -635,7 +635,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 		WriteAncientType(db, EntireFreezerType)
 	}
 	// Freezer is consistent with the key-value database, permit combining the two
-	if !disableFreeze && readonly {
+	if !disableFreeze && !readonly {
 		frdb.wg.Add(1)
 		go func() {
 			frdb.freeze(db)
