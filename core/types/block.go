@@ -748,76 +748,36 @@ func SealHash(header *Header, chainId *big.Int) (hash common.Hash) {
 }
 
 func EncodeSigHeader(w io.Writer, header *Header, chainId *big.Int) {
-	var err error
-	if header.RequestsHash != nil {
-		err = rlp.Encode(w, []interface{}{
-			chainId,
-			header.ParentHash,
-			header.UncleHash,
-			header.Coinbase,
-			header.Root,
-			header.TxHash,
-			header.ReceiptHash,
-			header.Bloom,
-			header.Difficulty,
-			header.Number,
-			header.GasLimit,
-			header.GasUsed,
-			header.Time,
-			header.Extra[:len(header.Extra)-extraSeal], // this will panic if extra is too short, should check before calling encodeSigHeader
-			header.MixDigest,
-			header.Nonce,
-			header.BaseFee,
-			header.WithdrawalsHash,
-			header.BlobGasUsed,
-			header.ExcessBlobGas,
-			header.ParentBeaconRoot,
-			header.RequestsHash,
-		})
-	} else if header.ParentBeaconRoot != nil && *header.ParentBeaconRoot == (common.Hash{}) {
-		err = rlp.Encode(w, []interface{}{
-			chainId,
-			header.ParentHash,
-			header.UncleHash,
-			header.Coinbase,
-			header.Root,
-			header.TxHash,
-			header.ReceiptHash,
-			header.Bloom,
-			header.Difficulty,
-			header.Number,
-			header.GasLimit,
-			header.GasUsed,
-			header.Time,
-			header.Extra[:len(header.Extra)-extraSeal], // this will panic if extra is too short, should check before calling encodeSigHeader
-			header.MixDigest,
-			header.Nonce,
-			header.BaseFee,
-			header.WithdrawalsHash,
-			header.BlobGasUsed,
-			header.ExcessBlobGas,
-			header.ParentBeaconRoot,
-		})
-	} else {
-		err = rlp.Encode(w, []interface{}{
-			chainId,
-			header.ParentHash,
-			header.UncleHash,
-			header.Coinbase,
-			header.Root,
-			header.TxHash,
-			header.ReceiptHash,
-			header.Bloom,
-			header.Difficulty,
-			header.Number,
-			header.GasLimit,
-			header.GasUsed,
-			header.Time,
-			header.Extra[:len(header.Extra)-extraSeal], // this will panic if extra is too short, should check before calling encodeSigHeader
-			header.MixDigest,
-			header.Nonce,
-		})
+	toEncode := []interface{}{
+		chainId,
+		header.ParentHash,
+		header.UncleHash,
+		header.Coinbase,
+		header.Root,
+		header.TxHash,
+		header.ReceiptHash,
+		header.Bloom,
+		header.Difficulty,
+		header.Number,
+		header.GasLimit,
+		header.GasUsed,
+		header.Time,
+		header.Extra[:len(header.Extra)-extraSeal], // this will panic if extra is too short, should check before calling encodeSigHeader
+		header.MixDigest,
+		header.Nonce,
 	}
+	if header.ParentBeaconRoot != nil && *header.ParentBeaconRoot == (common.Hash{}) {
+		toEncode = append(toEncode, header.BaseFee,
+			header.WithdrawalsHash,
+			header.BlobGasUsed,
+			header.ExcessBlobGas,
+			header.ParentBeaconRoot)
+
+		if header.RequestsHash != nil {
+			toEncode = append(toEncode, header.RequestsHash)
+		}
+	}
+	err := rlp.Encode(w, toEncode)
 	if err != nil {
 		panic("can't encode: " + err.Error())
 	}
