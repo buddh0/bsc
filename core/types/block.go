@@ -545,9 +545,9 @@ func (b *Block) WithSeal(header *Header) *Block {
 		transactions: b.transactions,
 		uncles:       b.uncles,
 		withdrawals:  b.withdrawals,
-		sidecars:     b.sidecars,
 		requests:     b.requests,
 		witness:      b.witness,
+		sidecars:     b.sidecars,
 	}
 }
 
@@ -559,9 +559,9 @@ func (b *Block) WithBody(body Body) *Block {
 		transactions: slices.Clone(body.Transactions),
 		uncles:       make([]*Header, len(body.Uncles)),
 		withdrawals:  slices.Clone(body.Withdrawals),
-		sidecars:     b.sidecars,
 		requests:     slices.Clone(body.Requests),
 		witness:      b.witness,
+		sidecars:     b.sidecars,
 	}
 	for i := range body.Uncles {
 		block.uncles[i] = CopyHeader(body.Uncles[i])
@@ -575,9 +575,9 @@ func (b *Block) WithWithdrawals(withdrawals []*Withdrawal) *Block {
 		header:       b.header,
 		transactions: b.transactions,
 		uncles:       b.uncles,
-		sidecars:     b.sidecars,
 		requests:     b.requests,
 		witness:      b.witness,
+		sidecars:     b.sidecars,
 	}
 	if withdrawals != nil {
 		block.withdrawals = make([]*Withdrawal, len(withdrawals))
@@ -609,9 +609,9 @@ func (b *Block) WithWitness(witness *ExecutionWitness) *Block {
 		transactions: b.transactions,
 		uncles:       b.uncles,
 		withdrawals:  b.withdrawals,
-		sidecars:     b.sidecars,
 		requests:     b.requests,
 		witness:      witness,
+		sidecars:     b.sidecars,
 	}
 }
 

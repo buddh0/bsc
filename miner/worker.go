@@ -701,9 +701,13 @@ func (w *worker) updateSnapshot(env *environment) {
 	w.snapshotMu.Lock()
 	defer w.snapshotMu.Unlock()
 
+	body := types.Body{Transactions: env.txs}
+	if env.header.EmptyWithdrawalsHash() {
+		body.Withdrawals = make([]*types.Withdrawal, 0)
+	}
 	w.snapshotBlock = types.NewBlock(
 		env.header,
-		&types.Body{Transactions: env.txs},
+		&body,
 		env.receipts,
 		trie.NewStackTrie(nil),
 	)
@@ -1420,6 +1424,9 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		// Withdrawals are set to nil here, because this is only called in PoW.
 		finalizeStart := time.Now()
 		body := types.Body{Transactions: env.txs}
+		if env.header.EmptyWithdrawalsHash() {
+			body.Withdrawals = make([]*types.Withdrawal, 0)
+		}
 		block, receipts, err := w.engine.FinalizeAndAssemble(w.chain, types.CopyHeader(env.header), env.state, &body, env.receipts)
 		if err != nil {
 			return err
@@ -1427,10 +1434,6 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		env.txs = body.Transactions
 		env.receipts = receipts
 		finalizeBlockTimer.UpdateSince(finalizeStart)
-
-		if block.Header().EmptyWithdrawalsHash() {
-			block = block.WithWithdrawals(make([]*types.Withdrawal, 0))
-		}
 
 		// If Cancun enabled, sidecars can't be nil then.
 		if w.chainConfig.IsCancun(env.header.Number, env.header.Time) && env.sidecars == nil {
