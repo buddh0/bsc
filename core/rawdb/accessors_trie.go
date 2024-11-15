@@ -286,7 +286,7 @@ func ReadStateScheme(db ethdb.Database) string {
 	}
 	// The root node of verkle might be deleted during the initial snap sync,
 	// check the persistent state id then.
-	if id := ReadPersistentStateID(vdb); id != 0 {
+	if id := ReadPersistentStateID(vdb.StateStoreReader()); id != 0 {
 		return PathScheme
 	}
 	// In a hash-based scheme, the genesis state is consistently stored
