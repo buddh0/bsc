@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -28,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/testrand"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
@@ -207,6 +209,7 @@ func (t *tester) clearStorage(ctx *genctx, addr common.Address, root common.Hash
 		origin[hash] = val
 		storage[hash] = nil
 	}
+	log.Info("clearStorage", "root", root, "len(storage)", len(storage))
 	root, set := updateTrie(t.db, ctx.stateRoot, addrHash, root, storage)
 	if root != types.EmptyRootHash {
 		panic("failed to clear storage trie")
@@ -399,6 +402,7 @@ func (t *tester) bottomIndex() int {
 
 func TestDatabaseRollback(t *testing.T) {
 	// Redefine the diff layer depth allowance for faster testing.
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 	maxDiffLayers = 4
 	defer func() {
 		maxDiffLayers = 128
