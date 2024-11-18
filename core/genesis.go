@@ -81,7 +81,7 @@ func ReadGenesis(db ethdb.Database) (*Genesis, error) {
 	if (stored == common.Hash{}) {
 		return nil, fmt.Errorf("invalid genesis hash in database: %x", stored)
 	}
-	blob := rawdb.ReadGenesisStateSpec(db.BlockStoreReader(), stored)
+	blob := rawdb.ReadGenesisStateSpec(db, stored)
 	if blob == nil {
 		return nil, errors.New("genesis state missing from db")
 	}
@@ -183,7 +183,7 @@ func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database) (common.Hash, e
 }
 
 func getGenesisState(db ethdb.Database, blockhash common.Hash) (alloc types.GenesisAlloc, err error) {
-	blob := rawdb.ReadGenesisStateSpec(db.BlockStoreReader(), blockhash)
+	blob := rawdb.ReadGenesisStateSpec(db, blockhash)
 	if len(blob) != 0 {
 		if err := alloc.UnmarshalJSON(blob); err != nil {
 			return nil, err
@@ -488,6 +488,7 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 		if conf.IsCancun(num, g.Timestamp) {
 			if conf.Parlia != nil {
 				head.WithdrawalsHash = &types.EmptyWithdrawalsHash
+				withdrawals = make([]*types.Withdrawal, 0)
 			}
 
 			// EIP-4788: The parentBeaconBlockRoot of the genesis block is always
@@ -507,7 +508,7 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 				head.BlobGasUsed = new(uint64)
 			}
 		}
-		if conf.Parlia == nil && conf.IsPrague(num, g.Timestamp) {
+		if conf.IsPrague(num, g.Timestamp) {
 			head.RequestsHash = &types.EmptyRequestsHash
 			requests = make(types.Requests, 0)
 		}
@@ -543,7 +544,7 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 	if err != nil {
 		return nil, err
 	}
-	rawdb.WriteGenesisStateSpec(db.BlockStore(), block.Hash(), blob)
+	rawdb.WriteGenesisStateSpec(db, block.Hash(), blob)
 	rawdb.WriteTd(db.BlockStore(), block.Hash(), block.NumberU64(), block.Difficulty())
 	rawdb.WriteBlock(db.BlockStore(), block)
 	rawdb.WriteReceipts(db.BlockStore(), block.Hash(), block.NumberU64(), nil)
