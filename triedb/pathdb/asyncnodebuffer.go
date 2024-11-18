@@ -295,6 +295,19 @@ func (nc *nodecache) empty() bool {
 	return nc.layers == 0
 }
 
+// allocBatch returns a database batch with pre-allocated buffer.
+func (nc *nodecache) allocBatch(db ethdb.KeyValueStore) ethdb.Batch {
+	var metasize int
+	for owner, nodes := range nc.nodes {
+		if owner == (common.Hash{}) {
+			metasize += len(nodes) * len(rawdb.TrieNodeAccountPrefix) // database key prefix
+		} else {
+			metasize += len(nodes) * (len(rawdb.TrieNodeStoragePrefix) + common.HashLength) // database key prefix + owner
+		}
+	}
+	return db.NewBatchWithSize((metasize + int(nc.size)) * 11 / 10) // extra 10% for potential pebble internal stuff
+}
+
 func (nc *nodecache) flush(db ethdb.KeyValueStore, clean *fastcache.Cache, id uint64) error {
 	if atomic.LoadUint64(&nc.immutable) != 1 {
 		return errFlushMutable
@@ -307,7 +320,7 @@ func (nc *nodecache) flush(db ethdb.KeyValueStore, clean *fastcache.Cache, id ui
 	}
 	var (
 		start = time.Now()
-		batch = db.NewBatchWithSize(int(float64(nc.size) * DefaultBatchRedundancyRate))
+		batch = nc.allocBatch(db)
 	)
 	nodes := writeNodes(batch, nc.nodes, clean)
 	rawdb.WritePersistentStateID(batch, id)
