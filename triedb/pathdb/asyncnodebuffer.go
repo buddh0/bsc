@@ -53,14 +53,11 @@ func (a *asyncnodebuffer) node(owner common.Hash, path []byte) (*trienode.Node, 
 	a.mux.RLock()
 	defer a.mux.RUnlock()
 
-	node, found := a.current.node(owner, path)
-	if !found {
-		return nil, false
-	}
+	node := a.current.node(owner, path)
 	if node == nil {
-		return a.background.node(owner, path)
+		node = a.background.node(owner, path)
 	}
-	return node, true
+	return node, node != nil
 }
 
 // commit merges the dirty nodes into the nodebuffer. This operation won't take
@@ -216,16 +213,16 @@ func newNodeCache(limit, size uint64, nodes map[common.Hash]map[string]*trienode
 	}
 }
 
-func (nc *nodecache) node(owner common.Hash, path []byte) (*trienode.Node, bool) {
+func (nc *nodecache) node(owner common.Hash, path []byte) *trienode.Node {
 	subset, ok := nc.nodes[owner]
 	if !ok {
-		return nil, false
+		return nil
 	}
 	n, ok := subset[string(path)]
 	if !ok {
-		return nil, false
+		return nil
 	}
-	return n, true
+	return n
 }
 
 func (nc *nodecache) commit(nodes map[common.Hash]map[string]*trienode.Node) error {

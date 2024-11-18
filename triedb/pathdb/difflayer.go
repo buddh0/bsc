@@ -237,7 +237,6 @@ func (dl *diffLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 			return n.Blob, n.Hash, &nodeLoc{loc: locDiffLayer, depth: depth}, nil
 		}
 	}
-	//TODO(will-2012): need read from persistLayer firstly?
 	// Trie node unknown to this layer, resolve from parent
 	return dl.parent.node(owner, path, depth+1)
 }
