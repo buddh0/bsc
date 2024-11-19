@@ -1198,7 +1198,9 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}
-	tracer.CaptureSystemTxEnd(intrinsicGas)
+	if tracer.CaptureSystemTxEnd != nil {
+		tracer.CaptureSystemTxEnd(intrinsicGas)
+	}
 	return tracer.GetResult()
 }
 
