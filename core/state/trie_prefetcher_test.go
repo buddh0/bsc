@@ -22,8 +22,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/testrand"
+	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 )
 
@@ -121,9 +125,10 @@ func TestCopyClose(t *testing.T) {
 	}
 }
 
-// TODO(Nathan): fix Verkle related test cases
-/*
-func TestVerklePrefetcher(t *testing.T) {
+// TODO(Nathan): fix before verkle enabled
+//
+//nolint:unused
+func testVerklePrefetcher(t *testing.T) {
 	disk := rawdb.NewMemoryDatabase()
 	db := triedb.NewDatabase(disk, triedb.VerkleDefaults)
 	sdb := NewDatabase(db, nil)
@@ -165,4 +170,3 @@ func TestVerklePrefetcher(t *testing.T) {
 		t.Fatal("Two different tries are retrieved")
 	}
 }
-*/
