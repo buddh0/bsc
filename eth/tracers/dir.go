@@ -39,7 +39,7 @@ type Context struct {
 // stop tracing.
 type Tracer struct {
 	*tracing.Hooks
-	GetResult          func() (json.RawMessage, error)
+	GetResult func() (json.RawMessage, error)
 	// Stop terminates execution of the tracer at the first opportune moment.
 	Stop func(err error)
 }
