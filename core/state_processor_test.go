@@ -446,9 +446,9 @@ var (
 )
 
 // TODO(Nathan): fix before verkle enabled
+//
 //nolint:unused
 func testProcessVerkle(t *testing.T) {
-
 	var (
 		config = &params.ChainConfig{
 			ChainID:                       big.NewInt(1),
