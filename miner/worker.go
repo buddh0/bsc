@@ -252,8 +252,9 @@ type worker struct {
 	recentMinedBlocks *lru.Cache
 }
 
-func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, init bool) *worker {
+func newWorker(config *Config, engine consensus.Engine, eth Backend, mux *event.TypeMux, init bool) *worker {
 	recentMinedBlocks, _ := lru.New(recentMinedCacheLimit)
+	chainConfig := eth.BlockChain().Config()
 	worker := &worker{
 		prefetcher:         core.NewStatePrefetcher(chainConfig, eth.BlockChain().HeadChain()),
 		config:             config,
