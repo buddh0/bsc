@@ -492,6 +492,7 @@ func (tab *Table) bucketAtDistance(d int) *bucket {
 	return tab.buckets[d-bucketMinDistance-1]
 }
 
+//nolint:unused
 func (tab *Table) filterNode(n *tableNode) bool {
 	if tab.enrFilter == nil {
 		return false
