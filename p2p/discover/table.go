@@ -569,9 +569,10 @@ func (tab *Table) handleAddNode(req addNodeOp) bool {
 		wn.isValidatedLive = true
 	}
 
-	if tab.filterNode(wn) {
-		return false
-	}
+	// TODO(Matus): fix the filterNode feature
+	// if tab.filterNode(wn) {
+	// 	return false
+	// }
 
 	b.entries = append(b.entries, wn)
 	b.replacements = deleteNode(b.replacements, wn.ID())
