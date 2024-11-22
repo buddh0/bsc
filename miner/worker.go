@@ -1454,7 +1454,6 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		case <-w.exitCh:
 			log.Info("Worker has exited")
 		}
-
 	}
 	if update {
 		w.updateSnapshot(env)
