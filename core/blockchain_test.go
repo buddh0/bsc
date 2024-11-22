@@ -4281,7 +4281,7 @@ func (c *mockParlia) Finalize(chain consensus.ChainHeaderReader, header *types.H
 
 func (c *mockParlia) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt) (*types.Block, []*types.Receipt, error) {
 	// Finalize block
-	c.Finalize(chain, header, state, &body.Transactions, nil, nil, nil, nil, nil)
+	c.Finalize(chain, header, state, &body.Transactions, body.Uncles, body.Withdrawals, nil, nil, nil)
 
 	// Assign the final state root to header.
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
