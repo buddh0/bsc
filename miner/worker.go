@@ -1446,17 +1446,15 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 
 		block = block.WithSidecars(env.sidecars)
 
-		// If we're post merge, just ignore
-		if !w.isTTDReached(block.Header()) {
-			select {
-			case w.taskCh <- &task{receipts: receipts, state: env.state, block: block, createdAt: time.Now()}:
-				log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
-					"txs", env.tcount, "blobs", env.blobs, "gas", block.GasUsed(), "fees", feesInEther, "elapsed", common.PrettyDuration(time.Since(start)))
+		select {
+		case w.taskCh <- &task{receipts: receipts, state: env.state, block: block, createdAt: time.Now()}:
+			log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
+				"txs", env.tcount, "blobs", env.blobs, "gas", block.GasUsed(), "fees", feesInEther, "elapsed", common.PrettyDuration(time.Since(start)))
 
-			case <-w.exitCh:
-				log.Info("Worker has exited")
-			}
+		case <-w.exitCh:
+			log.Info("Worker has exited")
 		}
+
 	}
 	if update {
 		w.updateSnapshot(env)
@@ -1478,13 +1476,6 @@ func (w *worker) getSealingBlock(params *generateParams) *newPayloadResult {
 	case <-w.exitCh:
 		return &newPayloadResult{err: errors.New("miner closed")}
 	}
-}
-
-// isTTDReached returns the indicator if the given block has reached the total
-// terminal difficulty for The Merge transition.
-func (w *worker) isTTDReached(header *types.Header) bool {
-	td, ttd := w.chain.GetTd(header.ParentHash, header.Number.Uint64()-1), w.chain.Config().TerminalTotalDifficulty
-	return td != nil && ttd != nil && td.Cmp(ttd) >= 0
 }
 
 // copyReceipts makes a deep copy of the given receipts.
