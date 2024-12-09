@@ -40,6 +40,7 @@ import (
 )
 
 var (
+	//nolint:unused
 	testVerkleChainConfig = &params.ChainConfig{
 		ChainID:                 big.NewInt(1),
 		HomesteadBlock:          big.NewInt(0),
