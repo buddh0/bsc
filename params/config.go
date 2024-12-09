@@ -495,8 +495,8 @@ func GetBuiltInChainConfig(ghash common.Hash) *ChainConfig {
 
 // NetworkNames are user friendly names to use in the chain spec banner.
 var NetworkNames = map[string]string{
-	MainnetChainConfig.ChainID.String(): "ETH mainnet",
-	BSCChainConfig.ChainID.String():     "BSC mainnet",
+	MainnetChainConfig.ChainID.String(): "mainnet",
+	BSCChainConfig.ChainID.String():     "bsc",
 	ChapelChainConfig.ChainID.String():  "chapel",
 	RialtoChainConfig.ChainID.String():  "rialto",
 }
