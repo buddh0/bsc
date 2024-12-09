@@ -497,6 +497,9 @@ func (f *BlockFetcher) loop() {
 			for peer, hashes := range request {
 				log.Trace("Fetching scheduled headers", "peer", peer, "list", hashes)
 
+				// Create a closure of the fetch and schedule in on a new thread
+				fetchHeader := f.fetching[hashes[0]].fetchHeader
+
 				go func(peer string) {
 					if f.fetchingHook != nil {
 						f.fetchingHook(hashes)
@@ -506,7 +509,7 @@ func (f *BlockFetcher) loop() {
 						go func(hash common.Hash) {
 							resCh := make(chan *eth.Response)
 
-							req, err := f.fetching[hashes[0]].fetchHeader(hash, resCh)
+							req, err := fetchHeader(hash, resCh)
 							if err != nil {
 								return // Legacy code, yolo
 							}
