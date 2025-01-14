@@ -994,6 +994,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, head uint64) e
 		default:
 			// Header retrieval either timed out, or the peer failed in some strange way
 			// (e.g. disconnect). Consider the master peer bad and drop
+			log.Debug("dropPeer during fetchHeaders")
 			d.dropPeer(p.id)
 
 			// Finish the sync gracefully instead of dumping the gathered data though

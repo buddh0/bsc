@@ -320,6 +320,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 			if fails > 2 {
 				queue.updateCapacity(peer, 0, 0)
 			} else {
+				log.Debug("dropPeer for timeout triggered during concurrentFetch")
 				d.dropPeer(peer.id)
 
 				// If this peer was the master peer, abort sync immediately

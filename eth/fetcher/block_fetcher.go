@@ -501,6 +501,7 @@ func (f *BlockFetcher) loop() {
 								// was already rescheduled at this point, we were
 								// waiting for a catchup. With an unresponsive
 								// peer however, it's a protocol violation.
+								log.Debug("dropPeer for timeout triggered during fetchHeader")
 								f.dropPeer(peer)
 							}
 						}(hash)
@@ -560,6 +561,7 @@ func (f *BlockFetcher) loop() {
 						// was already rescheduled at this point, we were
 						// waiting for a catchup. With an unresponsive
 						// peer however, it's a protocol violation.
+						log.Debug("dropPeer for timeout triggered during fetchBodies")
 						f.dropPeer(peer)
 					}
 				}(peer, hashes)
@@ -589,7 +591,7 @@ func (f *BlockFetcher) loop() {
 				if announce := f.fetching[hash]; announce != nil && announce.origin == task.peer && f.fetched[hash] == nil && f.completing[hash] == nil && f.queued[hash] == nil {
 					// If the delivered header does not match the promised number, drop the announcer
 					if header.Number.Uint64() != announce.number {
-						log.Trace("Invalid block number fetched", "peer", announce.origin, "hash", header.Hash(), "announced", announce.number, "provided", header.Number)
+						log.Debug("Invalid block number fetched", "peer", announce.origin, "hash", header.Hash(), "announced", announce.number, "provided", header.Number)
 						f.dropPeer(announce.origin)
 						f.forgetHash(hash)
 						continue
