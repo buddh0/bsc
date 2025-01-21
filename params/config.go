@@ -192,8 +192,7 @@ var (
 		LorentzTime:         nil,
 
 		Parlia: &ParliaConfig{
-			Period: 3,
-			Epoch:  200,
+			Epoch: 200,
 		},
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
@@ -241,8 +240,7 @@ var (
 		LorentzTime: nil,
 
 		Parlia: &ParliaConfig{
-			Period: 3,
-			Epoch:  200,
+			Epoch: 200,
 		},
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
@@ -291,12 +289,12 @@ var (
 		LorentzTime: nil,
 
 		Parlia: &ParliaConfig{
-			Period: 3,
-			Epoch:  200,
+			Epoch: 2000, // temp change it this way for test
 		},
 		BlobScheduleConfig: &BlobScheduleConfig{
-			Cancun: DefaultCancunBlobConfig,
-			Prague: DefaultPragueBlobConfigBSC,
+			Cancun:  DefaultCancunBlobConfig,
+			Prague:  DefaultPragueBlobConfigBSC,
+			Lorentz: DefaultLorentzBlobConfig,
 		},
 	}
 
@@ -333,8 +331,7 @@ var (
 		CancunTime:          newUint64(0),
 
 		Parlia: &ParliaConfig{
-			Period: 3,
-			Epoch:  200,
+			Epoch: 200,
 		},
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
@@ -556,6 +553,12 @@ var (
 		Prague: DefaultPragueBlobConfig,
 	}
 
+	// DefaultLorentzBlobConfig is the default blob configuration for the Lorentz fork.
+	DefaultLorentzBlobConfig = &BlobConfig{
+		Target:         1,
+		Max:            2,
+		UpdateFraction: 3338477,
+	}
 	DefaultPragueBlobConfigBSC = DefaultCancunBlobConfig
 	// for bsc, only DefaultCancunBlobConfig is used, so we can define MaxBlobsPerBlockForBSC more directly
 	MaxBlobsPerBlockForBSC = DefaultCancunBlobConfig.Max
@@ -680,8 +683,7 @@ func (c CliqueConfig) String() string {
 
 // ParliaConfig is the consensus engine configs for proof-of-staked-authority based sealing.
 type ParliaConfig struct {
-	Period uint64 `json:"period"` // Number of seconds between blocks to enforce
-	Epoch  uint64 `json:"epoch"`  // Epoch length to update validatorSet
+	Epoch uint64 `json:"epoch"` // Epoch length to update validatorSet
 }
 
 // String implements the stringer interface, returning the consensus engine details.
@@ -838,9 +840,10 @@ type BlobConfig struct {
 
 // BlobScheduleConfig determines target and max number of blobs allow per fork.
 type BlobScheduleConfig struct {
-	Cancun *BlobConfig `json:"cancun,omitempty"`
-	Prague *BlobConfig `json:"prague,omitempty"`
-	Verkle *BlobConfig `json:"verkle,omitempty"`
+	Cancun  *BlobConfig `json:"cancun,omitempty"`
+	Prague  *BlobConfig `json:"prague,omitempty"`
+	Lorentz *BlobConfig `json:"lorentz,omitempty"`
+	Verkle  *BlobConfig `json:"verkle,omitempty"`
 }
 
 // IsHomestead returns whether num is either equal to the homestead block or greater.
@@ -1319,6 +1322,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	}{
 		{name: "cancun", timestamp: c.CancunTime, config: bsc.Cancun},
 		{name: "prague", timestamp: c.PragueTime, config: bsc.Prague},
+		{name: "lorentz", timestamp: c.LorentzTime, config: bsc.Lorentz},
 	} {
 		if cur.config != nil {
 			if err := cur.config.validate(); err != nil {
@@ -1501,6 +1505,8 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 	switch {
 	case c.IsOsaka(london, time):
 		return forks.Osaka
+	case c.IsLorentz(london, time):
+		return forks.Lorentz
 	case c.IsPrague(london, time):
 		return forks.Prague
 	case c.IsCancun(london, time):
