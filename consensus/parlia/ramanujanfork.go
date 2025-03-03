@@ -12,6 +12,7 @@ import (
 const (
 	wiggleTimeBeforeFork       = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
 	fixedBackOffTimeBeforeFork = 200 * time.Millisecond
+	millisecondsUnit           = 500 // Set to 250 if block interval is 750ms; not enforced at the consensus level
 )
 
 func (p *Parlia) delayForRamanujanFork(snap *Snapshot, header *types.Header) time.Duration {
@@ -33,7 +34,7 @@ func (p *Parlia) blockTimeForRamanujanFork(snap *Snapshot, header, parent *types
 		blockTime = blockTime + p.backOffTime(snap, header, p.val)
 	}
 	if now := uint64(time.Now().UnixMilli()); blockTime < now {
-		blockTime = uint64(cmath.CeilDiv(int(now), 250)) * 250
+		blockTime = uint64(cmath.CeilDiv(int(now), millisecondsUnit)) * millisecondsUnit
 	}
 	return blockTime
 }
