@@ -60,6 +60,40 @@ var (
 	}
 )
 
+const (
+	SimulateExtraCost = 50 * time.Millisecond // additional time excluding commit transactions
+)
+
+var (
+	simulateSpeed = new(atomic.Uint32)
+)
+
+func loadSimulatSpeed() uint32 {
+	if simulateSpeed.Load() == 0 {
+		simulateSpeed.Store(100_000) // gas simulate every millisecond, based on the performance of bsc client
+	}
+	return simulateSpeed.Load()
+}
+
+func updateSimulateSpeed(gasSimulated uint64, timeCost time.Duration) {
+	const gasCountThresdhold = 5_000_000 // If gasSimulated is too small, the error margin increases
+	const gasSimulateBoundDivisor = 10
+	if gasSimulated < gasCountThresdhold || timeCost <= 0 {
+		return
+	}
+
+	oldSimulateSpeed := loadSimulatSpeed()
+	desiredSimulateSpeed := uint32(float64(gasSimulated) / float64(timeCost) * float64(time.Millisecond))
+	newSimulateSpeed, delta := oldSimulateSpeed, oldSimulateSpeed/gasSimulateBoundDivisor
+	if oldSimulateSpeed < desiredSimulateSpeed {
+		newSimulateSpeed += delta
+	} else if oldSimulateSpeed > desiredSimulateSpeed {
+		newSimulateSpeed -= delta
+	}
+	simulateSpeed.Store(newSimulateSpeed)
+	log.Debug("updateSimulatSpeed", "old simulatSpeed", oldSimulateSpeed, "desired SimulateSpeed", desiredSimulateSpeed, "new simulatSpeed", newSimulateSpeed)
+}
+
 type bidWorker interface {
 	prepareWork(params *generateParams, witness bool) (*environment, error)
 	etherbase() common.Address
@@ -162,6 +196,28 @@ func newBidSimulator(
 	go b.newBidLoop()
 
 	return b
+}
+
+func (b *bidSimulator) isTimeEnoughForSimulating(newBid *BidRuntime) (bool, error) {
+	minTimeLeftOver := b.delayLeftOver + SimulateExtraCost
+	delay := b.engine.Delay(b.chain, newBid.env.header, &minTimeLeftOver)
+	if delay == nil {
+		return false, nil
+	}
+	timeLeft := delay.Milliseconds()
+	estimateTimeNeedForSimulating := int64(float64(newBid.bid.GasUsed) / float64(loadSimulatSpeed()))
+	isEnough := timeLeft > estimateTimeNeedForSimulating
+	log.Debug("isTimeEnoughForSimulating",
+		"number", newBid.bid.BlockNumber,
+		"hash", newBid.bid.Hash().TerminalString(),
+		"estimate", estimateTimeNeedForSimulating,
+		"timeLeft", timeLeft,
+		"isEnough", isEnough)
+	if isEnough {
+		return true, nil
+	} else {
+		return false, fmt.Errorf("bid is discarded, simulate current bestBid need time(milliseconds): %d, time left: %d]", estimateTimeNeedForSimulating, timeLeft)
+	}
 }
 
 func (b *bidSimulator) dialSentryAndBuilders() {
@@ -363,7 +419,11 @@ func (b *bidSimulator) newBidLoop() {
 			if simulatingBid := b.GetSimulatingBid(newBid.bid.ParentHash); simulatingBid != nil {
 				// simulatingBid always better than bestBid, so only compare with simulatingBid if a simulatingBid exists
 				if bidRuntime.isExpectedBetterThan(simulatingBid) {
-					commit(commitInterruptBetterBid, bidRuntime)
+					if isEnough, err := b.isTimeEnoughForSimulating(bidRuntime); isEnough {
+						commit(commitInterruptBetterBid, bidRuntime)
+					} else {
+						replyErr = err
+					}
 				} else {
 					replyErr = genDiscardedReply(simulatingBid)
 				}
@@ -594,10 +654,13 @@ func (b *bidSimulator) simBid(interruptCh chan int32, bidRuntime *BidRuntime) {
 		return
 	}
 
+	commitTxsStart := time.Now()
+	gasPoolStart := bidRuntime.env.gasPool.Gas()
 	// commit transactions in bid
 	for _, tx := range bidRuntime.bid.Txs {
 		select {
 		case <-interruptCh:
+			updateSimulateSpeed(gasPoolStart-bidRuntime.env.gasPool.Gas(), time.Since(commitTxsStart))
 			err = errors.New("simulation abort due to better bid arrived")
 			return
 
@@ -619,6 +682,7 @@ func (b *bidSimulator) simBid(interruptCh chan int32, bidRuntime *BidRuntime) {
 			return
 		}
 	}
+	updateSimulateSpeed(gasPoolStart-bidRuntime.env.gasPool.Gas(), time.Since(commitTxsStart))
 
 	// check if bid reward is valid
 	{
