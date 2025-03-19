@@ -83,7 +83,7 @@ func updateSimulateSpeed(gasSimulated uint64, timeCost time.Duration) {
 	}
 
 	oldSimulateSpeed := loadSimulatSpeed()
-	desiredSimulateSpeed := uint32(float64(gasSimulated) / float64(timeCost) * float64(time.Millisecond))
+	desiredSimulateSpeed := uint32(float64(gasSimulated) / float64(timeCost.Milliseconds()))
 	newSimulateSpeed, delta := oldSimulateSpeed, oldSimulateSpeed/gasSimulateBoundDivisor
 	if oldSimulateSpeed < desiredSimulateSpeed {
 		newSimulateSpeed += delta
