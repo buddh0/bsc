@@ -199,13 +199,14 @@ func newBidSimulator(
 }
 
 func (b *bidSimulator) isTimeEnoughForSimulating(newBid *BidRuntime) (bool, error) {
+	const MaxEstimatedSimulateTimeMs = int64(1500) // 1.5s, half block interval
 	minTimeLeftOver := b.delayLeftOver + SimulateExtraCost
 	delay := b.engine.Delay(b.chain, newBid.env.header, &minTimeLeftOver)
 	if delay == nil {
 		return false, nil
 	}
 	timeLeft := delay.Milliseconds()
-	estimateTimeNeedForSimulating := int64(float64(newBid.bid.GasUsed) / float64(loadSimulatSpeed()))
+	estimateTimeNeedForSimulating := min(int64(float64(newBid.bid.GasUsed)/float64(loadSimulatSpeed())), MaxEstimatedSimulateTimeMs)
 	isEnough := timeLeft > estimateTimeNeedForSimulating
 	log.Debug("isTimeEnoughForSimulating",
 		"number", newBid.bid.BlockNumber,
