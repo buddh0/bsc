@@ -32,7 +32,8 @@ import (
 
 const (
 	// maxBidPerBuilderPerBlock is the max bid number per builder
-	maxBidPerBuilderPerBlock = 3
+	maxBidPerBuilderPerBlock   = 3
+	MaxEstimatedSimulateTimeMs = int64(1500) // 1.5s, half block interval
 )
 
 var (
@@ -65,14 +66,38 @@ const (
 )
 
 var (
-	simulateSpeed = new(atomic.Uint32)
+	gasUsedAverage        = new(atomic.Uint64)
+	simulateSpeed         = new(atomic.Uint32)
+	bidSimulationLeftOver = new(atomic.Int64) // ms
 )
+
+func loadGasUsedAverage() uint64 {
+	if gasUsedAverage.Load() == 0 {
+		gasUsedAverage.Store(30_000_000)
+	}
+	return gasUsedAverage.Load()
+}
 
 func loadSimulatSpeed() uint32 {
 	if simulateSpeed.Load() == 0 {
 		simulateSpeed.Store(100_000) // gas simulate every millisecond, based on the performance of bsc client
 	}
 	return simulateSpeed.Load()
+}
+
+func updateGasUsedAverage(gasUsed uint64) {
+	const gasUsedBoundDivisor = 10
+
+	oldGasUsedAverage := loadGasUsedAverage()
+	desiredGasUsed := gasUsed
+	newGasUsedAverage, delta := oldGasUsedAverage, oldGasUsedAverage/gasUsedBoundDivisor
+	if oldGasUsedAverage < desiredGasUsed {
+		newGasUsedAverage += delta
+	} else if oldGasUsedAverage > desiredGasUsed {
+		newGasUsedAverage -= delta
+	}
+	gasUsedAverage.Store(newGasUsedAverage)
+	log.Debug("updateGasUsedAverage", "old", oldGasUsedAverage, "desired", desiredGasUsed, "new", newGasUsedAverage)
 }
 
 func updateSimulateSpeed(gasSimulated uint64, timeCost time.Duration) {
@@ -91,7 +116,7 @@ func updateSimulateSpeed(gasSimulated uint64, timeCost time.Duration) {
 		newSimulateSpeed -= delta
 	}
 	simulateSpeed.Store(newSimulateSpeed)
-	log.Debug("updateSimulatSpeed", "old simulatSpeed", oldSimulateSpeed, "desired SimulateSpeed", desiredSimulateSpeed, "new simulatSpeed", newSimulateSpeed)
+	log.Debug("updateSimulateSpeed", "old", oldSimulateSpeed, "desired", desiredSimulateSpeed, "new", newSimulateSpeed)
 }
 
 type bidWorker interface {
@@ -199,7 +224,6 @@ func newBidSimulator(
 }
 
 func (b *bidSimulator) isTimeEnoughForSimulating(newBid *BidRuntime) (bool, error) {
-	const MaxEstimatedSimulateTimeMs = int64(1500) // 1.5s, half block interval
 	minTimeLeftOver := b.delayLeftOver + SimulateExtraCost
 	delay := b.engine.Delay(b.chain, newBid.env.header, &minTimeLeftOver)
 	if delay == nil {
@@ -458,9 +482,28 @@ func (b *bidSimulator) newBidLoop() {
 	}
 }
 
+func (b *bidSimulator) loadBidSimulationLeftOver() int64 {
+	if bidSimulationLeftOver.Load() == 0 {
+		bidSimulationLeftOver.Store(b.config.BidSimulationLeftOver.Milliseconds())
+	}
+	return bidSimulationLeftOver.Load()
+}
+
+func (b *bidSimulator) updateBidSimulationLeftOver(blockNumber uint64) {
+	const turnLength = 4
+	if blockNumber%turnLength == 0 { // avoid to update too often, because it will be passed to builders
+		oldBidSimulationLeftOver := b.loadBidSimulationLeftOver()
+		desiredBidSimulationLeftOver := loadGasUsedAverage() / uint64(loadSimulatSpeed())
+		newBidSimulationLeftOver := max(b.config.BidSimulationLeftOver.Milliseconds(), int64(desiredBidSimulationLeftOver))
+		newBidSimulationLeftOver = min(newBidSimulationLeftOver, MaxEstimatedSimulateTimeMs)
+		bidSimulationLeftOver.Store(newBidSimulationLeftOver)
+		log.Info("updateBidSimulationLeftOver", "old", oldBidSimulationLeftOver, "desired", desiredBidSimulationLeftOver, "new", newBidSimulationLeftOver)
+	}
+}
+
 func (b *bidSimulator) bidBetterBefore(parentHash common.Hash) time.Time {
 	parentHeader := b.chain.GetHeaderByHash(parentHash)
-	return bidutil.BidBetterBefore(parentHeader, b.chainConfig.Parlia.Period, b.delayLeftOver, b.config.BidSimulationLeftOver)
+	return bidutil.BidBetterBefore(parentHeader, b.chainConfig.Parlia.Period, b.delayLeftOver, time.Duration(b.loadBidSimulationLeftOver()*int64(time.Millisecond)))
 }
 
 func (b *bidSimulator) clearLoop() {
@@ -496,6 +539,9 @@ func (b *bidSimulator) clearLoop() {
 		if !b.isRunning() {
 			continue
 		}
+
+		updateGasUsedAverage(head.Header.GasUsed)
+		b.updateBidSimulationLeftOver(head.Header.Number.Uint64())
 
 		clearFn(head.Header.ParentHash, head.Header.Number.Uint64())
 	}

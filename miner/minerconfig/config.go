@@ -74,7 +74,7 @@ type MevConfig struct {
 	SentryURL             string          // The url of Mev sentry
 	Builders              []BuilderConfig // The list of builders
 	ValidatorCommission   uint64          // 100 means the validator claims 1% from block reward
-	BidSimulationLeftOver time.Duration
+	BidSimulationLeftOver time.Duration   // Tim minimum time left for bid simulation
 }
 
 var DefaultMevConfig = MevConfig{
