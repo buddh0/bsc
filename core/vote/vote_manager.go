@@ -22,7 +22,8 @@ import (
 // the new node may cast votes for the same block height that the previous node already voted on.
 // To avoid double-voting issues, the node should wait for a few blocks
 // before participating in voting after it starts mining.
-const blocksNumberSinceMining = 20
+const blocksNumberSinceMining = 300
+const minBroadcastTimeForVotes = 10 * time.Millisecond // enough to broadcast a vote
 
 var diffInTurn = big.NewInt(2) // Block difficulty for in-turn signatures
 var votesManagerCounter = metrics.NewRegisteredCounter("votesManager/local", nil)
@@ -159,9 +160,8 @@ func (voteManager *VoteManager) loop() {
 					log.Debug("failed to get BlockInterval when voting")
 				}
 				nextBlockMinedTime := time.UnixMilli(int64((curHead.MilliTimestamp() + blockInterval)))
-				timeForBroadcast := 50 * time.Millisecond // enough to broadcast a vote
-				if time.Now().Add(timeForBroadcast).After(nextBlockMinedTime) {
-					log.Warn("too late to vote", "Head.Time(Second)", curHead.Time, "Now(Millisecond)", time.Now().UnixMilli())
+				if time.Now().Add(minBroadcastTimeForVotes).After(nextBlockMinedTime) {
+					log.Warn("too late to vote", "Head.MilliTimestamp", curHead.MilliTimestamp(), "Now", time.Now().UnixMilli())
 					continue
 				}
 			}
