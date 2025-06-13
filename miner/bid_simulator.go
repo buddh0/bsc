@@ -742,9 +742,9 @@ func (b *bidSimulator) simBid(interruptCh chan int32, bidRuntime *BidRuntime) {
 		defer close(interruptPrefetchCh)
 		throwaway := bidRuntime.env.state.CopyDoPrefetch()
 		// Disable tracing for prefetcher executions.
-		vmCfg := b.chain.GetVMConfig()
+		vmCfg := *b.chain.GetVMConfig()
 		vmCfg.Tracer = nil
-		go b.bidWorker.getPrefetcher().Prefetch(bidRuntime.bid.Txs, bidRuntime.env.header, gasLimit, throwaway, vmCfg, interruptPrefetchCh)
+		go b.bidWorker.getPrefetcher().Prefetch(bidRuntime.bid.Txs, bidRuntime.env.header, gasLimit, throwaway, &vmCfg, interruptPrefetchCh)
 	}
 
 	// commit transactions in bid
